@@ -2,7 +2,8 @@ import { StrategyVersion, SnapshotItem, Asset, AppData } from '../types';
 
 // --- 配置区域 ---
 // 将此设置为 true，即可脱离后端独立运行，数据保存在 LocalStorage
-const USE_MOCK = true; 
+// 设置为 false 以连接本地运行的 Node.js 后端 (server.js)
+const USE_MOCK = false; 
 const API_BASE = '/api'; 
 const STORAGE_KEY = 'invest_track_mock_db_v1';
 

@@ -19,7 +19,9 @@
     "path": "^0.12.7",
     "express": "^5.2.1",
     "sqlite3": "^5.1.7",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "vite": "^7.3.0",
+    "@vitejs/plugin-react": "^5.1.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
