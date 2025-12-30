@@ -158,7 +158,11 @@ app.get('/api/strategies', (req, res) => {
     db.all(sql, [], (err, rows) => {
         if (err) return res.status(500).json({error: err.message});
         const result = rows.map(row => ({
-            ...row,
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            startDate: row.start_date, // Map snake_case to camelCase
+            status: row.status,
             items: JSON.parse(row.items).filter(i => i.id !== null).map(i => ({
                 id: i.id, 
                 targetName: i.targetName,
@@ -198,6 +202,44 @@ app.post('/api/strategies', (req, res) => {
     });
 });
 
+app.put('/api/strategies/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, description, startDate, status, items } = req.body;
+    
+    db.serialize(() => {
+        db.run("BEGIN TRANSACTION");
+        
+        // Update Meta
+        db.run("UPDATE strategy_versions SET name=?, description=?, start_date=?, status=? WHERE id=?",
+            [name, description, startDate, status, id]);
+
+        // Replace Items (Delete all then insert)
+        db.run("DELETE FROM strategy_targets WHERE version_id=?", [id]);
+
+        if (items && items.length > 0) {
+            const stmt = db.prepare("INSERT INTO strategy_targets (id, version_id, asset_id, target_ratio, color) VALUES (?, ?, ?, ?, ?)");
+            items.forEach(item => {
+                // Keep existing item ID if present, else new UUID
+                stmt.run(item.id || uuidv4(), id, item.assetId, item.targetWeight, item.color);
+            });
+            stmt.finalize();
+        }
+
+        db.run("COMMIT", (err) => {
+            if (err) res.status(500).json({error: err.message});
+            else res.json({ success: true, id });
+        });
+    });
+});
+
+app.delete('/api/strategies/:id', (req, res) => {
+    const { id } = req.params;
+    db.run("DELETE FROM strategy_versions WHERE id=?", [id], (err) => {
+        if (err) return res.status(500).json({error: err.message});
+        res.json({ success: true });
+    });
+});
+
 // 3. Snapshots
 app.get('/api/snapshots', (req, res) => {
     const sql = `
@@ -228,7 +270,11 @@ app.get('/api/snapshots', (req, res) => {
     db.all(sql, [], (err, rows) => {
         if (err) return res.status(500).json({error: err.message});
         const result = rows.map(row => ({
-            ...row,
+            id: row.id,
+            date: row.date,
+            totalValue: row.total_value, // Map snake to camel
+            totalInvested: row.total_invested, // Map snake to camel
+            note: row.note,
             assets: JSON.parse(row.assets).filter(x => x.id !== null)
         }));
         res.json(result);

@@ -165,6 +165,33 @@ export const StorageService = {
     });
   },
 
+  updateStrategy: async (strategy: StrategyVersion) => {
+      if (USE_MOCK) {
+          const db = getMockDB();
+          const idx = db.strategies.findIndex(s => s.id === strategy.id);
+          if (idx !== -1) {
+              db.strategies[idx] = strategy;
+              saveMockDB(db);
+          }
+          return mockDelay(void 0);
+      }
+      await fetch(`${API_BASE}/strategies/${strategy.id}`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(strategy)
+      });
+  },
+
+  deleteStrategy: async (id: string) => {
+      if (USE_MOCK) {
+          const db = getMockDB();
+          db.strategies = db.strategies.filter(s => s.id !== id);
+          saveMockDB(db);
+          return mockDelay(void 0);
+      }
+      await fetch(`${API_BASE}/strategies/${id}`, { method: 'DELETE' });
+  },
+
   getStrategyForDate: (versions: StrategyVersion[], dateStr: string): StrategyVersion | null => {
     if (!versions || versions.length === 0) return null;
     const sorted = [...versions].sort((a, b) => b.startDate.localeCompare(a.startDate));

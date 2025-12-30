@@ -205,7 +205,8 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
           </div>
           
           <div className="space-y-3">
-            {versions.sort((a,b) => b.startDate.localeCompare(a.startDate)).map(v => (
+            {/* Added safety check (|| '') for startDate to prevent crashes if data is malformed */}
+            {versions.sort((a,b) => (b.startDate || '').localeCompare(a.startDate || '')).map(v => (
               <div 
                 key={v.id}
                 onClick={() => setActiveVersionId(v.id)}
