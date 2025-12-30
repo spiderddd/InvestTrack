@@ -1,5 +1,5 @@
 // Asset Definitions (Global Dictionary)
-export type AssetCategory = 'security' | 'fund' | 'gold' | 'fixed' | 'crypto' | 'other';
+export type AssetCategory = 'security' | 'fund' | 'wealth' | 'gold' | 'fixed' | 'crypto' | 'other';
 
 export interface Asset {
   id: string;
@@ -57,7 +57,8 @@ export interface SnapshotItem {
   date: string; // YYYY-MM
   assets: AssetRecord[]; 
   totalValue: number; 
-  totalInvested: number; 
+  totalInvested: number;
+  note?: string; // New: Monthly investment note (Markdown supported)
 }
 
 // App Data Container (for UI state)

@@ -159,6 +159,7 @@ const App: React.FC = () => {
         {activeView === 'assets' && (
           <AssetManager 
             assets={assets}
+            snapshots={snapshots}
             onUpdate={loadData}
             onCreate={handleCreateAsset}
             onEdit={handleEditAsset}

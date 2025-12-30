@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Calendar, Trash2, Coins, Landmark, Briefcase, TrendingUp, DollarSign, Save, X, Activity, Search } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Plus, Calendar, Trash2, Coins, Landmark, Briefcase, TrendingUp, DollarSign, Save, X, Activity, Search, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { SnapshotItem, StrategyVersion, AssetRecord, AssetCategory, Asset } from '../types';
 import { generateId, StorageService } from '../services/storageService';
 
@@ -45,12 +46,16 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
   
   // Form State
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 7));
+  const [note, setNote] = useState('');
   const [rows, setRows] = useState<AssetRowInput[]>([]);
   
   // Asset Creation Modal
   const [isCreatingAsset, setIsCreatingAsset] = useState(false);
   const [newAssetName, setNewAssetName] = useState('');
   const [newAssetType, setNewAssetType] = useState<AssetCategory>('security');
+
+  // List View State
+  const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   
   const sortedSnapshots = [...snapshots].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -68,11 +73,13 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
 
   const initEntryForm = (snapshotId?: string) => {
     let baseDate = new Date().toISOString().slice(0, 7);
+    let baseNote = '';
     let initialRows: AssetRowInput[] = [];
 
     const existing = snapshots.find(s => s.id === snapshotId);
     if (existing) {
       baseDate = existing.date;
+      baseNote = existing.note || '';
       initialRows = existing.assets.map(a => ({
         recordId: a.id,
         assetId: a.assetId,
@@ -131,6 +138,7 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
     }
 
     setDate(baseDate);
+    setNote(baseNote);
     setRows(initialRows);
     setSelectedSnapshotId(snapshotId || null);
     setViewMode('entry');
@@ -161,7 +169,7 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
         strategyId: undefined,
         name: asset.name,
         category: asset.type,
-        price: prevAsset ? prevAsset.unitPrice.toString() : (asset.type === 'fixed' ? '1' : ''),
+        price: prevAsset ? prevAsset.unitPrice.toString() : (asset.type === 'fixed' || asset.type === 'wealth' ? '1' : ''),
         quantityChange: '',
         costChange: '',
         prevQuantity: prevAsset ? prevAsset.quantity : 0,
@@ -181,7 +189,8 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
   const handleSubmit = () => {
     if (onSave) {
         const finalAssets: AssetRecord[] = rows.map(r => {
-        const price = parseFloat(r.price) || (r.category === 'fixed' ? 1 : 0);
+        // Wealth and Fixed items often have unit price of 1
+        const price = parseFloat(r.price) || (r.category === 'fixed' || r.category === 'wealth' ? 1 : 0);
         const qChange = parseFloat(r.quantityChange) || 0;
         const cChange = parseFloat(r.costChange) || 0;
         
@@ -211,7 +220,8 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
             date,
             assets: finalAssets,
             totalValue: totalVal,
-            totalInvested: totalInv
+            totalInvested: totalInv,
+            note: note // Save the note
         };
 
         onSave(newSnapshot);
@@ -231,13 +241,21 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
       }
   };
 
+  const toggleNote = (id: string) => {
+    const newSet = new Set(expandedNotes);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setExpandedNotes(newSet);
+  };
+
   // --- Render Helpers ---
 
   const getCategoryIcon = (c: AssetCategory) => {
     switch (c) {
       case 'security': return <TrendingUp size={16} className="text-blue-600"/>;
+      case 'wealth': return <Landmark size={16} className="text-cyan-600"/>;
       case 'gold': return <Coins size={16} className="text-amber-600"/>;
-      case 'fixed': return <Landmark size={16} className="text-slate-600"/>;
+      case 'fixed': return <Briefcase size={16} className="text-slate-600"/>; // Using Briefcase for cash bag concept or just a simple icon
       default: return <Briefcase size={16} className="text-purple-600"/>;
     }
   };
@@ -246,7 +264,7 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
   
   if (viewMode === 'entry') {
     const totalAssetsVal = rows.reduce((sum, r) => {
-       const p = parseFloat(r.price) || (r.category === 'fixed' ? 1 : 0);
+       const p = parseFloat(r.price) || (r.category === 'fixed' || r.category === 'wealth' ? 1 : 0);
        const q = r.prevQuantity + (parseFloat(r.quantityChange) || 0);
        return sum + (p * q);
     }, 0);
@@ -277,46 +295,62 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
             </div>
           </div>
 
-          {/* Date & Add Asset Bar */}
-          <div className="p-6 border-b border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="max-w-xs relative">
-                <label className="text-xs font-bold text-slate-400 mb-1 block">账期</label>
-                <div className="relative">
-                    <Calendar className="absolute left-3 top-2.5 text-slate-400" size={18} />
-                    <input 
-                    type="month"
-                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={date} onChange={e => setDate(e.target.value)}
-                    disabled={!!selectedSnapshotId} 
-                    />
-                </div>
+          {/* Config Area: Date, Asset, Note */}
+          <div className="p-6 border-b border-slate-100 space-y-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="max-w-xs relative">
+                  <label className="text-xs font-bold text-slate-400 mb-1 block">账期 (Month)</label>
+                  <div className="relative">
+                      <Calendar className="absolute left-3 top-2.5 text-slate-400" size={18} />
+                      <input 
+                      type="month"
+                      className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={date} onChange={e => setDate(e.target.value)}
+                      disabled={!!selectedSnapshotId} 
+                      />
+                  </div>
+               </div>
+               <div>
+                  <label className="text-xs font-bold text-slate-400 mb-1 block">添加资产 (Add Asset)</label>
+                  <div className="flex gap-2">
+                      <select 
+                          className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                          onChange={(e) => {
+                              const asset = assets.find(a => a.id === e.target.value);
+                              if (asset) {
+                                  addAssetRow(asset);
+                                  e.target.value = ""; // Reset
+                              }
+                          }}
+                      >
+                          <option value="">+ 选择已定义的资产...</option>
+                          {availableAssets.map(a => (
+                              <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
+                          ))}
+                      </select>
+                      <button 
+                          onClick={() => setIsCreatingAsset(true)}
+                          className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+                          title="创建新资产"
+                      >
+                          <Plus size={18} />
+                      </button>
+                  </div>
+               </div>
              </div>
+
+             {/* Markdown Note Section */}
              <div>
-                <label className="text-xs font-bold text-slate-400 mb-1 block">添加资产 (从字典)</label>
-                <div className="flex gap-2">
-                    <select 
-                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm"
-                        onChange={(e) => {
-                            const asset = assets.find(a => a.id === e.target.value);
-                            if (asset) {
-                                addAssetRow(asset);
-                                e.target.value = ""; // Reset
-                            }
-                        }}
-                    >
-                        <option value="">+ 选择已定义的资产...</option>
-                        {availableAssets.map(a => (
-                            <option key={a.id} value={a.id}>{a.name} ({a.type})</option>
-                        ))}
-                    </select>
-                    <button 
-                        onClick={() => setIsCreatingAsset(true)}
-                        className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
-                        title="创建新资产"
-                    >
-                        <Plus size={18} />
-                    </button>
-                </div>
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-400 mb-1">
+                  <FileText size={14} />
+                  本月投资笔记 (Markdown) - <span className="font-normal opacity-70">记录当月市场观点、操作逻辑或备忘</span>
+                </label>
+                <textarea 
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono min-h-[100px]"
+                  placeholder="# 本月大事记&#10;- 美联储降息预期增强...&#10;- 增持了黄金..."
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                />
              </div>
           </div>
 
@@ -328,7 +362,8 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
                   <th className="p-4 w-64 sticky left-0 bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">资产名称</th>
                   <th className="p-4 w-32 text-right">当前单价</th>
                   <th className="p-4 w-40 text-right bg-blue-50/30">本月变动 (份额)</th>
-                  <th className="p-4 w-40 text-right bg-emerald-50/30">本月流水 (本金)</th>
+                  {/* Changed background to Red tint for money input */}
+                  <th className="p-4 w-40 text-right bg-rose-50/30">本月流水 (本金)</th>
                   <th className="p-4 w-32 text-right">持有总量</th>
                   <th className="p-4 w-40 text-right">当前市值</th>
                   <th className="p-4 w-16 text-center"></th>
@@ -336,7 +371,7 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((row, idx) => {
-                  const p = parseFloat(row.price) || (row.category === 'fixed' ? 1 : 0);
+                  const p = parseFloat(row.price) || (row.category === 'fixed' || row.category === 'wealth' ? 1 : 0);
                   const qChange = parseFloat(row.quantityChange) || 0;
                   const currentQ = row.prevQuantity + qChange;
                   const currentVal = currentQ * p;
@@ -359,7 +394,7 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
                            type="number" step="0.0001" placeholder="0.00"
                            className="w-full text-right px-2 py-1 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                            value={row.price} onChange={e => updateRow(idx, 'price', e.target.value)}
-                           disabled={row.category === 'fixed'} // Fixed price usually 1
+                           disabled={row.category === 'fixed' || row.category === 'wealth'} // Wealth price usually 1
                         />
                       </td>
                       <td className="p-4 bg-blue-50/30">
@@ -369,10 +404,11 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
                            value={row.quantityChange} onChange={e => updateRow(idx, 'quantityChange', e.target.value)}
                         />
                       </td>
-                      <td className="p-4 bg-emerald-50/30">
+                      {/* Changed input text color to Red for Principal/Cost */}
+                      <td className="p-4 bg-rose-50/30">
                          <input 
                            type="number" step="0.01" placeholder="0.00"
-                           className="w-full text-right px-2 py-1 border border-emerald-200 rounded focus:ring-2 focus:ring-emerald-500 outline-none text-emerald-700 font-medium"
+                           className="w-full text-right px-2 py-1 border border-rose-200 rounded focus:ring-2 focus:ring-rose-500 outline-none text-rose-700 font-medium"
                            value={row.costChange} onChange={e => updateRow(idx, 'costChange', e.target.value)}
                         />
                       </td>
@@ -420,8 +456,9 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
                             >
                                 <option value="security">股票/证券</option>
                                 <option value="fund">基金/ETF</option>
+                                <option value="wealth">银行理财</option>
                                 <option value="gold">贵金属/商品</option>
-                                <option value="fixed">现金/定存</option>
+                                <option value="fixed">现金/存款</option>
                                 <option value="crypto">加密货币</option>
                                 <option value="other">其他</option>
                             </select>
@@ -463,7 +500,9 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
              <p>暂无记录。点击右上角开始记账。</p>
            </div>
         ) : (
-          sortedSnapshots.map(s => (
+          sortedSnapshots.map(s => {
+            const netInput = s.assets.reduce((sum, a) => sum + a.addedPrincipal, 0);
+            return (
             <div key={s.id} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
               <div className="p-4 flex items-center justify-between bg-slate-50/50 border-b border-slate-100">
                  <div className="flex items-center gap-3">
@@ -480,15 +519,17 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
                  <div className="flex items-center gap-6">
                     <div className="text-right hidden sm:block">
                        <div className="text-xs text-slate-500">本月净投入</div>
-                       <div className="font-medium text-emerald-600">
-                          {s.assets.reduce((sum, a) => sum + a.addedPrincipal, 0) > 0 ? '+' : ''}
-                          {s.assets.reduce((sum, a) => sum + a.addedPrincipal, 0).toLocaleString()}
+                       {/* Red for Positive Input (Inflow to investment), Green for Negative (Outflow) */}
+                       <div className={`font-medium ${netInput > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {netInput > 0 ? '+' : ''}
+                          {netInput.toLocaleString()}
                        </div>
                     </div>
                     <div className="flex gap-2">
                        <button 
                         onClick={() => initEntryForm(s.id)}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="编辑"
                        >
                          <Calendar size={18} />
                        </button>
@@ -500,8 +541,8 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
                  </div>
               </div>
               
-              {/* Mini Preview of Assets */}
-              <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
+              {/* Assets Preview */}
+              <div className="px-4 py-3 border-b border-slate-50 flex gap-2 overflow-x-auto no-scrollbar">
                  {s.assets.slice(0, 5).map(a => (
                    <div key={a.id} className="text-xs px-2 py-1 bg-slate-50 rounded border border-slate-100 whitespace-nowrap text-slate-600 flex items-center gap-1">
                       {getCategoryIcon(a.category)}
@@ -510,8 +551,33 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
                  ))}
                  {s.assets.length > 5 && <span className="text-xs text-slate-400 self-center">+{s.assets.length - 5} 更多</span>}
               </div>
+
+              {/* Note Display Section */}
+              {s.note ? (
+                 <div className="px-4 py-2 bg-yellow-50/30">
+                   <button 
+                     onClick={() => toggleNote(s.id)}
+                     className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-slate-700 w-full"
+                   >
+                     {expandedNotes.has(s.id) ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                     <span>投资笔记</span>
+                     {!expandedNotes.has(s.id) && <span className="text-slate-400 font-normal truncate max-w-[200px] ml-2">{s.note}</span>}
+                   </button>
+                   
+                   {expandedNotes.has(s.id) && (
+                     <div className="mt-2 text-sm text-slate-700 prose prose-sm max-w-none prose-p:my-1">
+                        <ReactMarkdown>{s.note}</ReactMarkdown>
+                     </div>
+                   )}
+                 </div>
+              ) : (
+                <div className="px-4 py-1">
+                  <span className="text-[10px] text-slate-300 italic">本月未留笔记</span>
+                </div>
+              )}
+
             </div>
-          ))
+          )}
         )}
       </div>
     </div>

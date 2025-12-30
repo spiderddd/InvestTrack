@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
     date TEXT NOT NULL UNIQUE,
     total_value REAL,
     total_invested REAL,
+    note TEXT,
     updated_at INTEGER
 );
 
@@ -241,7 +242,7 @@ app.get('/api/snapshots', (req, res) => {
 });
 
 app.post('/api/snapshots', (req, res) => {
-    const { date, assets } = req.body; // assets is array of position objects
+    const { date, assets, note } = req.body; // assets is array of position objects
     
     // Check if exists
     db.get("SELECT id FROM snapshots WHERE date = ?", [date], (err, row) => {
@@ -259,14 +260,14 @@ app.post('/api/snapshots', (req, res) => {
             
             if (row) {
                 // Update existing
-                db.run("UPDATE snapshots SET total_value=?, total_invested=?, updated_at=? WHERE id=?", 
-                    [totalValue, totalInvested, now, snapshotId]);
+                db.run("UPDATE snapshots SET total_value=?, total_invested=?, note=?, updated_at=? WHERE id=?", 
+                    [totalValue, totalInvested, note, now, snapshotId]);
                 // Clear old positions to re-insert (simplest strategy for edit)
                 db.run("DELETE FROM positions WHERE snapshot_id=?", [snapshotId]);
             } else {
                 // Insert new
-                db.run("INSERT INTO snapshots (id, date, total_value, total_invested, updated_at) VALUES (?, ?, ?, ?, ?)",
-                    [snapshotId, date, totalValue, totalInvested, now]);
+                db.run("INSERT INTO snapshots (id, date, total_value, total_invested, note, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    [snapshotId, date, totalValue, totalInvested, note, now]);
             }
 
             const stmt = db.prepare(`
