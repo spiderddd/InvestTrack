@@ -604,7 +604,7 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
               )}
 
             </div>
-          )})}
+          )})
         )}
       </div>
     </div>

@@ -277,14 +277,15 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                        {currentVersion.description ? (
                          <ReactMarkdown 
                             components={{
-                              h1: ({node, ...props}) => <h1 className="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100" {...props} />,
-                              h2: ({node, ...props}) => <h2 className="text-xl font-bold text-slate-800 mt-6 mb-3" {...props} />,
-                              h3: ({node, ...props}) => <h3 className="text-lg font-bold text-slate-700 mt-4 mb-2" {...props} />,
-                              ul: ({node, ...props}) => <ul className="list-disc pl-5 space-y-1 my-2 text-slate-700" {...props} />,
-                              li: ({node, ...props}) => <li className="pl-1" {...props} />,
-                              p: ({node, ...props}) => <p className="mb-4 text-slate-600 leading-relaxed" {...props} />,
-                              blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-blue-200 pl-4 py-1 my-4 bg-blue-50/50 rounded-r text-slate-700 italic" {...props} />,
-                              strong: ({node, ...props}) => <strong className="font-bold text-slate-900" {...props} />
+                              // Use explicit children passing instead of spread props for safety
+                              h1: ({children}) => <h1 className="text-2xl font-bold text-slate-900 mb-4 pb-2 border-b border-slate-100">{children}</h1>,
+                              h2: ({children}) => <h2 className="text-xl font-bold text-slate-800 mt-6 mb-3">{children}</h2>,
+                              h3: ({children}) => <h3 className="text-lg font-bold text-slate-700 mt-4 mb-2">{children}</h3>,
+                              ul: ({children}) => <ul className="list-disc pl-5 space-y-1 my-2 text-slate-700">{children}</ul>,
+                              li: ({children}) => <li className="pl-1">{children}</li>,
+                              p: ({children}) => <p className="mb-4 text-slate-600 leading-relaxed">{children}</p>,
+                              blockquote: ({children}) => <blockquote className="border-l-4 border-blue-200 pl-4 py-1 my-4 bg-blue-50/50 rounded-r text-slate-700 italic">{children}</blockquote>,
+                              strong: ({children}) => <strong className="font-bold text-slate-900">{children}</strong>
                             }}
                          >
                            {currentVersion.description}
