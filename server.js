@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS strategy_targets (
     id TEXT PRIMARY KEY,
     version_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
+    module TEXT,
     target_ratio REAL NOT NULL,
     color TEXT,
     FOREIGN KEY(version_id) REFERENCES strategy_versions(id) ON DELETE CASCADE,
@@ -88,7 +89,9 @@ CREATE TABLE IF NOT EXISTS positions (
 db.serialize(() => {
     db.exec(initSql, (err) => {
         if (err) console.error("DB Init Error:", err);
-        else console.log("Database initialized successfully at", DB_PATH);
+        else {
+            console.log("Database initialized successfully at", DB_PATH);
+        }
     });
 });
 
@@ -145,7 +148,7 @@ app.get('/api/strategies', (req, res) => {
                     'targetRatio', t.target_ratio,
                     'color', t.color,
                     'targetName', a.name,
-                    'module', a.type 
+                    'module', t.module
                 )
             ) as items 
         FROM strategy_versions v
@@ -168,7 +171,7 @@ app.get('/api/strategies', (req, res) => {
                 targetName: i.targetName,
                 targetWeight: i.targetRatio,
                 color: i.color,
-                module: i.module,
+                module: i.module || '默认模块', // Explicitly read module from DB target
                 assetId: i.assetId 
             }))
         }));
@@ -188,9 +191,9 @@ app.post('/api/strategies', (req, res) => {
             [id, name, description, startDate, now]);
             
         if (items && items.length > 0) {
-            const stmt = db.prepare("INSERT INTO strategy_targets (id, version_id, asset_id, target_ratio, color) VALUES (?, ?, ?, ?, ?)");
+            const stmt = db.prepare("INSERT INTO strategy_targets (id, version_id, asset_id, module, target_ratio, color) VALUES (?, ?, ?, ?, ?, ?)");
             items.forEach(item => {
-                stmt.run(uuidv4(), id, item.assetId, item.targetWeight, item.color);
+                stmt.run(uuidv4(), id, item.assetId, item.module, item.targetWeight, item.color);
             });
             stmt.finalize();
         }
@@ -217,10 +220,10 @@ app.put('/api/strategies/:id', (req, res) => {
         db.run("DELETE FROM strategy_targets WHERE version_id=?", [id]);
 
         if (items && items.length > 0) {
-            const stmt = db.prepare("INSERT INTO strategy_targets (id, version_id, asset_id, target_ratio, color) VALUES (?, ?, ?, ?, ?)");
+            const stmt = db.prepare("INSERT INTO strategy_targets (id, version_id, asset_id, module, target_ratio, color) VALUES (?, ?, ?, ?, ?, ?)");
             items.forEach(item => {
                 // Keep existing item ID if present, else new UUID
-                stmt.run(item.id || uuidv4(), id, item.assetId, item.targetWeight, item.color);
+                stmt.run(item.id || uuidv4(), id, item.assetId, item.module, item.targetWeight, item.color);
             });
             stmt.finalize();
         }
