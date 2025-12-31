@@ -37,7 +37,6 @@ interface AssetPerformance {
 
 export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, onUpdate, onCreate, onEdit, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  // const [filterType, setFilterType] = useState<AssetCategory | 'all'>('all'); // Removed filter, using columns
   
   // Date Selection State
   const [selectedDate, setSelectedDate] = useState<string>('latest');
@@ -209,24 +208,21 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
 
   const renderAssetCard = (asset: Asset) => {
     const status = assetPerformanceMap.get(asset.id);
-    const isHeld = !!status && !status.isHistorical; // Considered "Held" if present in selected snapshot time
+    const isHeld = !!status && !status.isHistorical; 
     
-    // Calculate metrics
     const marketValue = status ? status.marketValue : 0;
     const totalCost = status ? status.totalCost : 0;
     const profit = marketValue - totalCost;
     const isProfitable = profit >= 0;
 
-    // Chinese Red/Green Convention
     const trendColor = isProfitable ? 'text-rose-600' : 'text-emerald-600';
 
     return (
       <div 
         key={asset.id} 
-        className={`bg-white rounded-lg p-3 border shadow-sm hover:shadow-md transition-all cursor-pointer group mb-3 relative overflow-hidden ${isHeld ? 'border-slate-200' : 'border-slate-100 opacity-70 hover:opacity-100 bg-slate-50'}`}
+        className={`bg-white rounded-lg p-3 border shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden ${isHeld ? 'border-slate-200' : 'border-slate-100 opacity-70 hover:opacity-100 bg-slate-50'}`}
         onClick={() => setViewHistoryId(asset.id)}
       >
-        {/* Held Indicator Stripe */}
         {isHeld && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-lg"></div>}
         
         <div className="flex justify-between items-start mb-2 pl-2">
@@ -235,14 +231,12 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
                 {asset.ticker && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{asset.ticker}</div>}
             </div>
             
-             {/* Hover Actions */}
              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-2 bg-white/90 rounded shadow-sm p-1">
                 <button onClick={(e) => { e.stopPropagation(); openEditModal(asset); }} className="p-1 hover:text-blue-600"><Edit2 size={12} /></button>
                 <button onClick={(e) => { e.stopPropagation(); handleDelete(asset.id, asset.name); }} className="p-1 hover:text-red-600"><Trash2 size={12} /></button>
             </div>
         </div>
 
-        {/* Value Section */}
         <div className="pl-2">
             {status ? (
                 <>
@@ -268,10 +262,11 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
 
   return (
     <div className="pb-10 h-[calc(100vh-100px)] flex flex-col">
+      {/* Header Area */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4 shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">资产库看板</h2>
-          <p className="text-slate-500 text-sm">全量资产管理，按类别分组，按市值排序。</p>
+          <p className="text-slate-500 text-sm">全量资产管理，按类别分组。</p>
         </div>
         <div className="flex items-center gap-2">
             <div className="relative">
@@ -300,7 +295,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
       </div>
 
       {/* Search Bar */}
-      <div className="relative w-full max-w-md mb-4 shrink-0">
+      <div className="relative w-full max-w-md mb-6 shrink-0">
           <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
           <input 
             type="text" 
@@ -311,42 +306,49 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
           />
       </div>
 
-      {/* Kanban Board Container */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-        <div className="flex gap-4 h-full min-w-max px-1">
-           {CATEGORIES.map(cat => {
-               const items = columns.get(cat.value) || [];
-               // Only show columns that match search, or show all if search is empty to maintain structure?
-               // Showing all columns is better for "Asset Library" structure.
-               const hasItems = items.length > 0;
-               
-               return (
-                   <div key={cat.value} className="w-72 flex flex-col h-full bg-slate-50/50 rounded-xl border border-slate-100/50">
-                       {/* Column Header */}
-                       <div className={`p-3 border-b border-slate-100 flex items-center justify-between rounded-t-xl bg-slate-100/50`}>
-                           <div className="flex items-center gap-2">
-                               <div className={`p-1.5 rounded-lg ${cat.color}`}>
-                                   <cat.icon size={14} />
-                               </div>
-                               <span className="font-bold text-slate-700 text-sm">{cat.label}</span>
-                           </div>
-                           <span className="bg-white text-slate-400 text-xs px-2 py-0.5 rounded-full border border-slate-100 shadow-sm">{items.length}</span>
-                       </div>
-                       
-                       {/* Column Content */}
-                       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200">
-                           {items.length > 0 ? (
-                               items.map(asset => renderAssetCard(asset))
-                           ) : (
-                               <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-50">
-                                   <div className="text-xs">暂无资产</div>
-                               </div>
-                           )}
-                       </div>
-                   </div>
-               )
-           })}
-        </div>
+      {/* Vertical Stack Layout with Responsive Grid */}
+      <div className="flex-1 overflow-y-auto pr-2 pb-10 space-y-8 scrollbar-thin scrollbar-thumb-slate-200">
+        {CATEGORIES.map(cat => {
+            const items = columns.get(cat.value) || [];
+            
+            // If no items match (and we are searching, or just empty in general), hide the section to keep it clean
+            if (items.length === 0) return null;
+            
+            return (
+                <div key={cat.value} className="bg-slate-50/50 rounded-xl border border-slate-100 p-4">
+                    {/* Section Header */}
+                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-200/60">
+                         <div className={`p-1.5 rounded-lg ${cat.color}`}>
+                             <cat.icon size={16} />
+                         </div>
+                         <h3 className="font-bold text-slate-700">{cat.label}</h3>
+                         <span className="bg-white text-slate-400 text-xs px-2 py-0.5 rounded-full border border-slate-200 shadow-sm ml-auto">
+                           {items.length}
+                         </span>
+                    </div>
+
+                    {/* Responsive Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        {items.map(asset => renderAssetCard(asset))}
+                    </div>
+                </div>
+            )
+        })}
+        
+        {/* Empty State if all filtered out */}
+        {assets.length > 0 && Array.from(columns.values()).every(list => list.length === 0) && (
+            <div className="text-center py-20 text-slate-400">
+                <Search size={48} className="mx-auto mb-4 opacity-20" />
+                <p>未找到匹配的资产</p>
+            </div>
+        )}
+
+        {assets.length === 0 && (
+             <div className="text-center py-20 text-slate-400">
+                <Plus size={48} className="mx-auto mb-4 opacity-20" />
+                <p>资产库为空，请点击右上角添加。</p>
+            </div>
+        )}
       </div>
 
       {/* Edit Modal */}
