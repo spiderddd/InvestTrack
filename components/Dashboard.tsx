@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { 
-  PieChart, Pie, Cell, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid 
+  PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Legend 
 } from 'recharts';
 import { TrendingUp, DollarSign, Activity, Wallet, History, Calendar, Filter, ArrowRight } from 'lucide-react';
 import { StrategyVersion, SnapshotItem } from '../types';
@@ -349,17 +349,18 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
                     data={allocationData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={2}
+                    innerRadius={50}
+                    outerRadius={75}
+                    paddingAngle={3}
                     dataKey="value"
+                    label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                    labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
                   >
                     {allocationData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="white" strokeWidth={2} />
                     ))}
                   </Pie>
                   <RechartsTooltip formatter={(value: number) => `¥${value.toLocaleString()}`} />
-                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -369,36 +370,50 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
             </div>
           )}
           
-          <div className="mt-6">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          <div className="mt-6 border-t border-slate-50 pt-4">
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
               明细数据 ({endSnapshot?.date})
             </h4>
-            <div className="space-y-3">
+            
+            {/* Header Row */}
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mb-2 px-2">
+               <span className="flex-1">资产名称</span>
+               <span className="flex-1 text-right">持有市值</span>
+               <span className="w-32 text-right">占比 / 目标 (偏离)</span>
+            </div>
+
+            <div className="space-y-1">
               {allocationData.map((item: any) => (
-                <div key={item.name} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }}></div>
-                    <span className="text-slate-700">{item.name}</span>
+                <div key={item.name} className="flex items-center justify-between text-sm p-2 rounded hover:bg-slate-50 transition-colors">
+                  {/* Name Col */}
+                  <div className="flex-1 flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }}></div>
+                    <span className="text-slate-700 font-medium truncate" title={item.name}>{item.name}</span>
                   </div>
                   
-                  {viewMode === 'strategy' ? (
-                    <div className="flex items-center gap-4">
-                      <span className="text-slate-500 text-xs">目标: {item.targetPercent}%</span>
-                      <span className={`font-medium ${Math.abs(item.deviation) > 5 ? 'text-amber-600' : 'text-slate-700'}`}>
-                        {item.percent}% 
-                        <span className="text-xs ml-1 opacity-70">
-                          ({item.deviation > 0 ? '+' : ''}{item.deviation.toFixed(1)}%)
-                        </span>
-                      </span>
-                    </div>
-                  ) : (
-                     <div className="flex items-center gap-4">
-                       <span className="font-bold text-slate-800">¥{item.value.toLocaleString()}</span>
-                       <span className="font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded text-xs">
+                  {/* Value Col */}
+                  <div className="flex-1 text-right font-mono text-slate-600 px-2">
+                     ¥{item.value.toLocaleString()}
+                  </div>
+
+                  {/* Ratio Analysis Col */}
+                  <div className="w-32 text-right">
+                     {viewMode === 'strategy' ? (
+                       <div className="flex flex-col items-end leading-tight">
+                         <div className="flex items-baseline gap-1">
+                            <span className="font-bold text-slate-800">{item.percent}%</span>
+                            <span className="text-xs text-slate-400">/ {item.targetPercent}%</span>
+                         </div>
+                         <span className={`text-[10px] font-medium ${Math.abs(item.deviation) > 2 ? (item.deviation > 0 ? 'text-amber-600' : 'text-blue-600') : 'text-slate-300'}`}>
+                            {item.deviation > 0 ? '+' : ''}{item.deviation.toFixed(1)}%
+                         </span>
+                       </div>
+                     ) : (
+                       <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs">
                          {item.percent}%
                        </span>
-                     </div>
-                  )}
+                     )}
+                  </div>
                 </div>
               ))}
             </div>
