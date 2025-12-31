@@ -139,7 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
         return {
           name: s.targetName,
           value: actualValue,
-          percent: parseFloat(actualPercent.toFixed(1)),
+          percent: parseFloat(actualPercent.toFixed(1)), // 0-100 scale
           targetPercent: s.targetWeight,
           color: s.color,
           deviation: actualPercent - s.targetWeight
@@ -353,7 +353,8 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
                     outerRadius={75}
                     paddingAngle={3}
                     dataKey="value"
-                    label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                    // Modified: Use payload.percent directly to avoid 100x multiplication issues if Recharts passes 0-100 or 0-1
+                    label={({ payload }) => `${payload.percent}%`}
                     labelLine={{ stroke: '#cbd5e1', strokeWidth: 1 }}
                   >
                     {allocationData.map((entry, index) => (

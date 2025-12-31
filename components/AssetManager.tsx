@@ -37,7 +37,7 @@ interface AssetPerformance {
 
 export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, onUpdate, onCreate, onEdit, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<AssetCategory | 'all'>('all');
+  // const [filterType, setFilterType] = useState<AssetCategory | 'all'>('all'); // Removed filter, using columns
   
   // Date Selection State
   const [selectedDate, setSelectedDate] = useState<string>('latest');
@@ -51,9 +51,6 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
 
   // History View Modal State
   const [viewHistoryId, setViewHistoryId] = useState<string | null>(null);
-
-  // UI State
-  const [isClearedOpen, setIsClearedOpen] = useState(false);
 
   // Available Dates for Dropdown
   const availableDates = useMemo(() => {
@@ -116,6 +113,37 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
     return map;
   }, [snapshots, selectedDate, viewSnapshot]);
 
+  // --- Data Logic: Grouped Columns ---
+  const columns = useMemo(() => {
+    const groups = new Map<AssetCategory, Asset[]>();
+    
+    // Initialize groups
+    CATEGORIES.forEach(c => groups.set(c.value, []));
+
+    // Filter and assign assets
+    assets.forEach(asset => {
+      // 1. Filter by search
+      const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (asset.ticker && asset.ticker.toLowerCase().includes(searchTerm.toLowerCase()));
+      if (!matchesSearch) return;
+
+      // 2. Add to group
+      const list = groups.get(asset.type);
+      if (list) list.push(asset);
+    });
+
+    // Sort assets inside each group by Market Value Desc
+    groups.forEach((list) => {
+      list.sort((a, b) => {
+        const valA = assetPerformanceMap.get(a.id)?.marketValue || 0;
+        const valB = assetPerformanceMap.get(b.id)?.marketValue || 0;
+        return valB - valA; // High to Low
+      });
+    });
+
+    return groups;
+  }, [assets, searchTerm, assetPerformanceMap]);
+
   // --- Data Logic: Specific Asset History (For History Modal) ---
   const selectedAssetHistory = useMemo(() => {
     if (!viewHistoryId) return [];
@@ -138,41 +166,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
         .sort((a, b) => a!.date.localeCompare(b!.date));
   }, [snapshots, viewHistoryId]);
 
-
-  // --- Filtering ---
-  const { heldAssets, clearedAssets, totalHeldValue, totalHeldProfit } = useMemo(() => {
-    const held: Asset[] = [];
-    const cleared: Asset[] = [];
-    let totalVal = 0;
-    let totalProfit = 0;
-
-    const filtered = assets.filter(a => {
-      const matchesSearch = a.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (a.ticker && a.ticker.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesType = filterType === 'all' || a.type === filterType;
-      return matchesSearch && matchesType;
-    });
-
-    filtered.forEach(asset => {
-      const perf = assetPerformanceMap.get(asset.id);
-      
-      // If asset is currently held (exists in map AND not historical)
-      if (perf && !perf.isHistorical) {
-        held.push(asset);
-        totalVal += perf.marketValue;
-        totalProfit += (perf.marketValue - perf.totalCost);
-      } else {
-        // Either historical (cleared) or new (no record)
-        cleared.push(asset);
-      }
-    });
-
-    return { heldAssets: held, clearedAssets: cleared, totalHeldValue: totalVal, totalHeldProfit: totalProfit };
-  }, [assets, searchTerm, filterType, assetPerformanceMap]);
-
-
   // --- Handlers ---
-
   const openEditModal = (asset?: Asset) => {
     if (asset) {
       setEditingId(asset.id);
@@ -213,110 +207,71 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
 
   // --- Renderers ---
 
-  const renderAssetCard = (asset: Asset, isHeld: boolean) => {
-    const meta = getCategoryMeta(asset.type);
-    const Icon = meta.icon;
+  const renderAssetCard = (asset: Asset) => {
     const status = assetPerformanceMap.get(asset.id);
-
-    // Calculate metrics or defaults for new assets
+    const isHeld = !!status && !status.isHistorical; // Considered "Held" if present in selected snapshot time
+    
+    // Calculate metrics
     const marketValue = status ? status.marketValue : 0;
     const totalCost = status ? status.totalCost : 0;
     const profit = marketValue - totalCost;
-    const roi = totalCost > 0 ? (profit / totalCost) * 100 : 0;
     const isProfitable = profit >= 0;
 
     // Chinese Red/Green Convention
     const trendColor = isProfitable ? 'text-rose-600' : 'text-emerald-600';
-    const trendBg = isProfitable ? 'bg-rose-50' : 'bg-emerald-50';
-    const trendSign = isProfitable ? '+' : '';
 
     return (
       <div 
         key={asset.id} 
-        className={`bg-white rounded-xl border transition-all duration-200 group relative flex flex-col justify-between
-          ${isHeld 
-            ? 'border-slate-100 shadow-sm hover:shadow-md' 
-            : 'border-slate-100 bg-slate-50 opacity-60 hover:opacity-100 hover:shadow-sm'
-          }`}
+        className={`bg-white rounded-lg p-3 border shadow-sm hover:shadow-md transition-all cursor-pointer group mb-3 relative overflow-hidden ${isHeld ? 'border-slate-200' : 'border-slate-100 opacity-70 hover:opacity-100 bg-slate-50'}`}
+        onClick={() => setViewHistoryId(asset.id)}
       >
-        <div 
-           className="p-5 flex-1 cursor-pointer"
-           onClick={() => setViewHistoryId(asset.id)}
-        >
-            {/* Header: Identity */}
-            <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl shrink-0 ${isHeld ? meta.color : 'bg-slate-200 text-slate-400 grayscale'}`}>
-                        <Icon size={22} />
-                    </div>
-                    <div>
-                        <h3 className={`font-bold text-base leading-tight ${isHeld ? 'text-slate-800' : 'text-slate-600'}`}>
-                            {asset.name}
-                        </h3>
-                        <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
-                            {asset.ticker && <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{asset.ticker}</span>}
-                            <span>{meta.label}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                {/* Actions */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity -mr-1" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => setViewHistoryId(asset.id)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition-colors" title="历史">
-                        <History size={16} />
-                    </button>
-                    <button onClick={() => openEditModal(asset)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition-colors" title="编辑">
-                        <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(asset.id, asset.name)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-100 rounded transition-colors" title="删除">
-                        <Trash2 size={16} />
-                    </button>
-                </div>
-            </div>
-
-            {/* Metrics */}
+        {/* Held Indicator Stripe */}
+        {isHeld && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 rounded-l-lg"></div>}
+        
+        <div className="flex justify-between items-start mb-2 pl-2">
             <div>
-                 <div className="text-[11px] font-medium text-slate-400 mb-0.5 uppercase tracking-wider flex items-center gap-2">
-                    {isHeld 
-                        ? '当前市值' 
-                        : (status ? `清仓市值 (${status.date})` : '暂无持仓')
-                    }
-                    {!isHeld && !status && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[10px]">New</span>}
-                 </div>
-                 
-                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <div className={`text-2xl font-bold font-mono tracking-tight ${isHeld ? 'text-slate-900' : 'text-slate-500'}`}>
-                        ¥{marketValue.toLocaleString()}
-                    </div>
-                    
-                    {/* Profitability Indicators - Show even if cleared, as requested */}
-                    {status && status.totalCost > 0 && (
-                        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-sm font-bold ${trendBg} ${trendColor}`}>
-                            <span>{trendSign}{Math.abs(profit).toLocaleString()}</span>
-                            <span className="opacity-80 text-xs">| {trendSign}{roi.toFixed(2)}%</span>
-                        </div>
-                    )}
-                 </div>
+                <h4 className={`font-bold text-sm ${isHeld ? 'text-slate-800' : 'text-slate-500'}`}>{asset.name}</h4>
+                {asset.ticker && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{asset.ticker}</div>}
+            </div>
+            
+             {/* Hover Actions */}
+             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-2 bg-white/90 rounded shadow-sm p-1">
+                <button onClick={(e) => { e.stopPropagation(); openEditModal(asset); }} className="p-1 hover:text-blue-600"><Edit2 size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(asset.id, asset.name); }} className="p-1 hover:text-red-600"><Trash2 size={12} /></button>
             </div>
         </div>
-        
-        {/* Footer for Held Assets */}
-        {isHeld && status && (
-             <div className="px-5 py-3 border-t border-slate-50 bg-slate-50/30 rounded-b-xl flex justify-between items-center text-xs text-slate-500">
-                <div>持有: {status.quantity.toLocaleString()}</div>
-                <div>成本: ¥{status.totalCost.toLocaleString()}</div>
-             </div>
-        )}
+
+        {/* Value Section */}
+        <div className="pl-2">
+            {status ? (
+                <>
+                    <div className="flex items-baseline justify-between mb-1">
+                        <span className="text-xs text-slate-400">市值</span>
+                        <span className={`font-bold font-mono text-sm ${isHeld ? 'text-slate-900' : 'text-slate-500'}`}>¥{marketValue.toLocaleString()}</span>
+                    </div>
+                    {totalCost > 0 && (
+                        <div className="flex items-baseline justify-between text-[10px]">
+                            <span className="text-slate-400">浮盈</span>
+                            <span className={`font-medium ${trendColor}`}>{profit > 0 ? '+' : ''}{profit.toLocaleString()}</span>
+                        </div>
+                    )}
+                     {!isHeld && <div className="text-[9px] text-slate-400 text-right mt-1">已清仓 / 历史数据</div>}
+                </>
+            ) : (
+                <div className="text-[10px] text-slate-400 italic text-center py-2">暂无持仓记录</div>
+            )}
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="pb-20">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+    <div className="pb-10 h-[calc(100vh-100px)] flex flex-col">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4 shrink-0">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">资产库管理</h2>
-          <p className="text-slate-500 text-sm">定义您的投资标的字典，点击卡片查看历史走势。</p>
+          <h2 className="text-2xl font-bold text-slate-800">资产库看板</h2>
+          <p className="text-slate-500 text-sm">全量资产管理，按类别分组，按市值排序。</p>
         </div>
         <div className="flex items-center gap-2">
             <div className="relative">
@@ -344,85 +299,55 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6 flex flex-col md:flex-row gap-4 items-center">
-        <div className="relative flex-1 w-full">
+      {/* Search Bar */}
+      <div className="relative w-full max-w-md mb-4 shrink-0">
           <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
           <input 
             type="text" 
-            placeholder="搜索资产名称..." 
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="搜索资产名称 / 代码..." 
+            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
-        </div>
-        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
-          <button onClick={() => setFilterType('all')} className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap border ${filterType === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>全部</button>
-          {CATEGORIES.map(cat => (
-             <button key={cat.value} onClick={() => setFilterType(cat.value)} className={`px-3 py-1.5 rounded-lg text-sm whitespace-nowrap border flex items-center gap-1 ${filterType === cat.value ? 'bg-blue-50 border-blue-200 text-blue-700 font-medium' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-               <cat.icon size={14} />{cat.label}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Empty State */}
-      {heldAssets.length === 0 && clearedAssets.length === 0 && (
-        <div className="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-100 border-dashed">
-             <Coins size={48} className="mx-auto mb-4 opacity-20" />
-             <p>没有找到符合条件的资产。</p>
+      {/* Kanban Board Container */}
+      <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
+        <div className="flex gap-4 h-full min-w-max px-1">
+           {CATEGORIES.map(cat => {
+               const items = columns.get(cat.value) || [];
+               // Only show columns that match search, or show all if search is empty to maintain structure?
+               // Showing all columns is better for "Asset Library" structure.
+               const hasItems = items.length > 0;
+               
+               return (
+                   <div key={cat.value} className="w-72 flex flex-col h-full bg-slate-50/50 rounded-xl border border-slate-100/50">
+                       {/* Column Header */}
+                       <div className={`p-3 border-b border-slate-100 flex items-center justify-between rounded-t-xl bg-slate-100/50`}>
+                           <div className="flex items-center gap-2">
+                               <div className={`p-1.5 rounded-lg ${cat.color}`}>
+                                   <cat.icon size={14} />
+                               </div>
+                               <span className="font-bold text-slate-700 text-sm">{cat.label}</span>
+                           </div>
+                           <span className="bg-white text-slate-400 text-xs px-2 py-0.5 rounded-full border border-slate-100 shadow-sm">{items.length}</span>
+                       </div>
+                       
+                       {/* Column Content */}
+                       <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200">
+                           {items.length > 0 ? (
+                               items.map(asset => renderAssetCard(asset))
+                           ) : (
+                               <div className="h-full flex flex-col items-center justify-center text-slate-300 opacity-50">
+                                   <div className="text-xs">暂无资产</div>
+                               </div>
+                           )}
+                       </div>
+                   </div>
+               )
+           })}
         </div>
-      )}
-
-      {/* Held Assets Section */}
-      {heldAssets.length > 0 && (
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 px-1 gap-2">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-              <Wallet size={18} className="text-blue-600" />
-              {selectedDate === 'latest' ? '目前持有' : `${selectedDate} 时持有`}
-              <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full">{heldAssets.length}</span>
-            </h3>
-            <div className="flex items-center gap-3">
-                 <div className="text-sm font-medium text-slate-600 bg-white px-3 py-1 rounded-lg border border-slate-100 shadow-sm flex items-center gap-2">
-                    <span className="text-slate-400 text-xs">总市值</span>
-                    <span className="font-bold text-slate-800">¥{totalHeldValue.toLocaleString()}</span>
-                 </div>
-                 <div className="text-sm font-medium text-slate-600 bg-white px-3 py-1 rounded-lg border border-slate-100 shadow-sm flex items-center gap-2">
-                    <span className="text-slate-400 text-xs">总浮盈</span>
-                    <span className={`font-bold ${totalHeldProfit >= 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                        {totalHeldProfit >= 0 ? '+' : ''}¥{totalHeldProfit.toLocaleString()}
-                    </span>
-                 </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {heldAssets.map(asset => renderAssetCard(asset, true))}
-          </div>
-        </div>
-      )}
-
-      {/* Cleared Assets Section */}
-      {clearedAssets.length > 0 && (
-        <div className="mb-8">
-          <button 
-            onClick={() => setIsClearedOpen(!isClearedOpen)}
-            className="flex items-center gap-2 w-full text-left mb-4 px-1 group outline-none"
-          >
-            {isClearedOpen ? <ChevronDown size={18} className="text-slate-400" /> : <ChevronRight size={18} className="text-slate-400" />}
-            <h3 className="font-bold text-slate-500 group-hover:text-slate-700 transition-colors">
-              {selectedDate === 'latest' ? '已清空 / 历史持有 / 观察中' : `${selectedDate} 时未持有`}
-            </h3>
-            <span className="bg-slate-100 text-slate-500 text-xs px-2 py-0.5 rounded-full">{clearedAssets.length}</span>
-          </button>
-          
-          {isClearedOpen && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
-              {clearedAssets.map(asset => renderAssetCard(asset, false))}
-            </div>
-          )}
-        </div>
-      )}
+      </div>
 
       {/* Edit Modal */}
       {isEditModalOpen && (
