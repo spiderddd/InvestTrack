@@ -96,14 +96,25 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
       });
 
       if (allocationView === 'asset') {
-          // Flatten all targets from all layers
-          const allTargets = appliedStrategy.layers.flatMap(l => 
-            l.items.map(t => ({
-                ...t, 
-                // Global Target % = LayerWeight * InnerWeight / 100
-                globalWeight: (l.weight * t.weight) / 100 
-            }))
-          );
+          // Flatten all targets from all layers with AUTO calculation
+          const allTargets = appliedStrategy.layers.flatMap(l => {
+            // 1. Calculate Auto Weights for this layer
+            const fixedItems = l.items.filter(t => t.weight >= 0);
+            const autoItems = l.items.filter(t => t.weight === -1);
+            
+            const usedWeight = fixedItems.reduce((sum, t) => sum + t.weight, 0);
+            const remainingWeight = Math.max(0, 100 - usedWeight);
+            const calculatedAutoWeight = autoItems.length > 0 ? (remainingWeight / autoItems.length) : 0;
+
+            return l.items.map(t => {
+                const effectiveWeight = t.weight === -1 ? calculatedAutoWeight : t.weight;
+                return {
+                    ...t, 
+                    // Global Target % = LayerWeight * EffectiveInnerWeight / 100
+                    globalWeight: (l.weight * effectiveWeight) / 100 
+                };
+            });
+          });
 
           return allTargets.map(s => {
             const actualValue = actualMap.get(s.id) || 0;

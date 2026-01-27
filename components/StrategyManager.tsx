@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
   Plus, Trash2, Edit2, AlertCircle, History, Copy, Calendar, BookOpen, 
-  Save, X, Layers, Layout, Calculator, Maximize2, ArrowLeft, FileText
+  Save, X, Layers, Layout, Calculator, Maximize2, ArrowLeft, FileText, Sparkles
 } from 'lucide-react';
 import { StrategyVersion, StrategyLayer, StrategyTarget, Asset } from '../types';
 import { generateId, StorageService } from '../services/storageService';
@@ -124,7 +124,10 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
       if (item) {
           setModalAsset({ 
               isOpen: true, layerId, item, 
-              assetId: item.assetId, weight: item.weight.toString(), note: item.note || '', color: item.color 
+              assetId: item.assetId, 
+              weight: item.weight === -1 ? '' : item.weight.toString(), // -1 maps to empty string for UI
+              note: item.note || '', 
+              color: item.color 
           });
       } else {
           setModalAsset({ 
@@ -136,8 +139,10 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
 
   const submitAssetModal = (e: React.FormEvent) => {
       e.preventDefault();
-      const w = parseFloat(modalAsset.weight);
-      if (!modalAsset.assetId || isNaN(w)) return;
+      // Logic for Weight: Empty string => -1 (Auto)
+      const w = modalAsset.weight.trim() === '' ? -1 : parseFloat(modalAsset.weight);
+      
+      if (!modalAsset.assetId || (w !== -1 && isNaN(w))) return;
       if (!currentVersion) return;
       
       const assetObj = assets.find(a => a.id === modalAsset.assetId);
@@ -169,6 +174,7 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                   color: modalAsset.color
               });
           }
+          // Sort: Fixed weights first (desc), then Auto (-1)
           newItems.sort((a, b) => b.weight - a.weight);
           return { ...l, items: newItems };
       });
@@ -237,6 +243,20 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
         return !isUsed || isSelf;
     });
   }, [assets, currentVersion, modalAsset.isOpen, modalAsset.item]);
+
+  // --- Derived State: Remaining Weight for Modal Hint ---
+  const remainingWeightInModalLayer = useMemo(() => {
+    if (!currentVersion || !modalAsset.isOpen) return 0;
+    const layer = currentVersion.layers.find(l => l.id === modalAsset.layerId);
+    if (!layer) return 0;
+
+    // Sum of existing fixed weights, EXCLUDING the current item being edited
+    const used = layer.items
+        .filter(i => i.weight >= 0 && (!modalAsset.item || i.id !== modalAsset.item.id))
+        .reduce((sum, i) => sum + i.weight, 0);
+    
+    return Math.max(0, 100 - used);
+  }, [currentVersion, modalAsset.isOpen, modalAsset.layerId, modalAsset.item]);
 
 
   if (versions.length === 0) {
@@ -383,7 +403,15 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                 </div>
 
                 <div className="space-y-6">
-                    {currentVersion.layers.map(layer => (
+                    {currentVersion.layers.map(layer => {
+                        // Calculate Distribution Visualization for this Layer
+                        const fixedItems = layer.items.filter(i => i.weight >= 0);
+                        const autoItems = layer.items.filter(i => i.weight === -1);
+                        const usedWeight = fixedItems.reduce((sum, i) => sum + i.weight, 0);
+                        const remaining = Math.max(0, 100 - usedWeight);
+                        const autoWeight = autoItems.length > 0 ? (remaining / autoItems.length) : 0;
+
+                        return (
                         <div key={layer.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             {/* Layer Header */}
                             <div className="bg-slate-50 px-4 py-3 border-b border-slate-100 flex items-center justify-between">
@@ -405,7 +433,9 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                             {/* Assets List */}
                             <div className="p-4">
                                 <div className="space-y-2">
-                                    {layer.items.map(item => (
+                                    {layer.items.map(item => {
+                                        const effectiveWeight = item.weight === -1 ? autoWeight : item.weight;
+                                        return (
                                         <div key={item.id} className="flex items-center justify-between p-3 border border-slate-100 rounded-lg hover:border-blue-100 transition-colors bg-slate-50/50">
                                             <div className="flex items-center gap-3 flex-1">
                                                 <div className="w-1.5 h-8 rounded-full" style={{backgroundColor: item.color}}></div>
@@ -417,11 +447,13 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                                             <div className="text-right flex items-center gap-6">
                                                 <div>
                                                     <div className="text-xs text-slate-400">层内占比</div>
-                                                    <div className="font-bold text-slate-700">{item.weight}%</div>
+                                                    <div className={`font-bold ${item.weight === -1 ? 'text-blue-500 italic' : 'text-slate-700'}`}>
+                                                        {effectiveWeight.toFixed(1)}% {item.weight === -1 ? '(自动)' : ''}
+                                                    </div>
                                                 </div>
                                                 <div>
                                                     <div className="text-xs text-slate-400">全局权重</div>
-                                                    <div className="font-mono text-xs text-slate-500">{(layer.weight * item.weight / 100).toFixed(1)}%</div>
+                                                    <div className="font-mono text-xs text-slate-500">{(layer.weight * effectiveWeight / 100).toFixed(1)}%</div>
                                                 </div>
                                                 {isCurrentActive && (
                                                     <div className="flex gap-1 ml-2">
@@ -431,7 +463,7 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                                                 )}
                                             </div>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                                 {isCurrentActive && (
                                     <button 
@@ -443,7 +475,7 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                                 )}
                             </div>
                         </div>
-                    ))}
+                    )})}
 
                     {isCurrentActive && (
                         <button 
@@ -511,11 +543,27 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
                         )}
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">层内占比 (%)</label>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 flex justify-between">
+                            <span>层内占比 (%)</span>
+                            <span className="text-blue-600 flex items-center gap-1">
+                                <Sparkles size={12}/> 剩余可用: {remainingWeightInModalLayer.toFixed(1)}%
+                            </span>
+                        </label>
                         <div className="flex items-center gap-2">
-                             <input required type="number" step="0.1" className="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" value={modalAsset.weight} onChange={e => setModalAsset({...modalAsset, weight: e.target.value})} />
-                             <span className="text-xs text-slate-400">占该层级的比例</span>
+                             <input 
+                                type="number" step="0.1" 
+                                className="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" 
+                                value={modalAsset.weight} 
+                                onChange={e => setModalAsset({...modalAsset, weight: e.target.value})} 
+                                placeholder="留空则自动计算 (Auto)"
+                             />
                         </div>
+                        <p className="text-xs text-slate-400 mt-1">
+                            {modalAsset.weight === '' 
+                                ? "当前状态：自动填充剩余空间。" 
+                                : `手动指定：${parseFloat(modalAsset.weight || '0').toFixed(1)}%`
+                            }
+                        </p>
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-500 mb-1">选股逻辑 / 备注</label>
