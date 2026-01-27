@@ -1,15 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  Search, Plus, Trash2, Edit2, Coins, Briefcase, Landmark, TrendingUp, Wallet, X, Save, AlertCircle, ChevronDown, Clock, History, BarChart2, Eye, EyeOff 
+  Search, Plus, Trash2, Edit2, Coins, Briefcase, Landmark, TrendingUp, Wallet, X, Save, AlertCircle, ChevronDown, Clock, History, BarChart2, Eye, EyeOff, Layers, LayoutGrid, HelpCircle 
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend 
 } from 'recharts';
-import { Asset, AssetCategory, SnapshotItem } from '../types';
+import { Asset, AssetCategory, SnapshotItem, StrategyVersion } from '../types';
 
 interface AssetManagerProps {
   assets: Asset[];
   snapshots: SnapshotItem[];
+  strategies: StrategyVersion[]; // Added strategies
   onUpdate: () => void; // Trigger reload in parent
   onCreate: (asset: Partial<Asset>) => Promise<void>;
   onEdit: (id: string, asset: Partial<Asset>) => Promise<boolean>;
@@ -25,6 +26,8 @@ const CATEGORIES: { value: AssetCategory; label: string; icon: any; color: strin
   { value: 'crypto', label: '加密货币', icon: Briefcase, color: 'text-purple-600 bg-purple-50' }, 
   { value: 'other', label: '其他资产', icon: Briefcase, color: 'text-pink-600 bg-pink-50' },
 ];
+
+const LAYER_COLORS = ['text-blue-600 bg-blue-50', 'text-amber-600 bg-amber-50', 'text-emerald-600 bg-emerald-50', 'text-rose-600 bg-rose-50', 'text-purple-600 bg-purple-50'];
 
 interface AssetPerformance {
   quantity: number;
@@ -45,9 +48,20 @@ interface AssetHistoryRecord {
   roi: number;
 }
 
-export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, onUpdate, onCreate, onEdit, onDelete }) => {
+interface DisplaySection {
+    id: string;
+    label: string;
+    icon: any;
+    color: string;
+    items: Asset[];
+}
+
+export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, strategies, onUpdate, onCreate, onEdit, onDelete }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showHeldOnly, setShowHeldOnly] = useState(false);
+  
+  // Grouping Mode
+  const [groupBy, setGroupBy] = useState<'category' | 'layer'>('category');
   
   // Date Selection State
   const [selectedDate, setSelectedDate] = useState<string>('latest');
@@ -68,6 +82,11 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
       .map(s => s.date)
       .sort((a, b) => b.localeCompare(a)); // Descending
   }, [snapshots]);
+
+  const activeStrategy = useMemo(() => {
+      // Find active or latest
+      return strategies.find(s => s.status === 'active') || strategies[strategies.length - 1];
+  }, [strategies]);
 
   // --- Data Logic: Performance Map (Snapshots -> Current Status) ---
   const viewSnapshot = useMemo(() => {
@@ -123,41 +142,95 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
     return map;
   }, [snapshots, selectedDate, viewSnapshot]);
 
-  // --- Data Logic: Grouped Columns ---
-  const columns = useMemo(() => {
-    const groups = new Map<AssetCategory, Asset[]>();
-    
-    // Initialize groups
-    CATEGORIES.forEach(c => groups.set(c.value, []));
+  // --- Data Logic: Grouping and Filtering ---
+  const displaySections: DisplaySection[] = useMemo(() => {
+    let sections: DisplaySection[] = [];
 
-    // Filter and assign assets
+    // 1. Prepare Sections Structure
+    if (groupBy === 'category') {
+        sections = CATEGORIES.map(c => ({
+            id: c.value,
+            label: c.label,
+            icon: c.icon,
+            color: c.color,
+            items: []
+        }));
+    } else {
+        // Group by Layer
+        if (activeStrategy && activeStrategy.layers) {
+            sections = activeStrategy.layers.map((l, idx) => ({
+                id: l.id,
+                label: l.name,
+                icon: Layers,
+                color: LAYER_COLORS[idx % LAYER_COLORS.length],
+                items: []
+            }));
+        }
+        // Always add "Others" at the end
+        sections.push({
+            id: 'unassigned',
+            label: '未分配 / 其他',
+            icon: HelpCircle,
+            color: 'text-slate-400 bg-slate-100',
+            items: []
+        });
+    }
+
+    // 2. Build Asset ID -> Section Map
+    const assetToSectionMap = new Map<string, string>(); // AssetID -> SectionID
+
+    if (groupBy === 'layer' && activeStrategy) {
+        activeStrategy.layers.forEach(l => {
+            l.items.forEach(t => {
+                assetToSectionMap.set(t.assetId, l.id);
+            });
+        });
+    }
+
+    // 3. Assign Assets to Sections
     assets.forEach(asset => {
-      // 1. Filter by search
-      const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (asset.ticker && asset.ticker.toLowerCase().includes(searchTerm.toLowerCase()));
-      if (!matchesSearch) return;
+        // Filter: Search
+        const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              (asset.ticker && asset.ticker.toLowerCase().includes(searchTerm.toLowerCase()));
+        if (!matchesSearch) return;
 
-      // 2. Filter by Holding Status
-      if (showHeldOnly && !assetPerformanceMap.has(asset.id)) {
-        return;
-      }
+        // Filter: Held Only
+        if (showHeldOnly && !assetPerformanceMap.has(asset.id)) {
+            return;
+        }
 
-      // 3. Add to group
-      const list = groups.get(asset.type);
-      if (list) list.push(asset);
+        // Determine Section
+        let sectionIndex = -1;
+        
+        if (groupBy === 'category') {
+             sectionIndex = sections.findIndex(s => s.id === asset.type);
+        } else {
+             const layerId = assetToSectionMap.get(asset.id);
+             if (layerId) {
+                 sectionIndex = sections.findIndex(s => s.id === layerId);
+             } else {
+                 sectionIndex = sections.length - 1; // Unassigned
+             }
+        }
+
+        if (sectionIndex !== -1) {
+            sections[sectionIndex].items.push(asset);
+        }
     });
 
-    // Sort assets inside each group by Market Value Desc
-    groups.forEach((list) => {
-      list.sort((a, b) => {
-        const valA = assetPerformanceMap.get(a.id)?.marketValue || 0;
-        const valB = assetPerformanceMap.get(b.id)?.marketValue || 0;
-        return valB - valA; // High to Low
-      });
+    // 4. Sort assets inside each group by Market Value Desc
+    sections.forEach(sec => {
+        sec.items.sort((a, b) => {
+            const valA = assetPerformanceMap.get(a.id)?.marketValue || 0;
+            const valB = assetPerformanceMap.get(b.id)?.marketValue || 0;
+            return valB - valA; // High to Low
+        });
     });
 
-    return groups;
-  }, [assets, searchTerm, assetPerformanceMap, showHeldOnly]);
+    // 5. Filter empty sections
+    return sections.filter(s => s.items.length > 0);
+
+  }, [assets, searchTerm, assetPerformanceMap, showHeldOnly, groupBy, activeStrategy]);
 
   // --- Data Logic: Specific Asset History (For History Modal) ---
   const selectedAssetHistory: AssetHistoryRecord[] = useMemo(() => {
@@ -320,12 +393,34 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
   return (
     <div className="pb-10">
       {/* Header Area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">资产库看板</h2>
-          <p className="text-slate-500 text-sm">全量资产管理，按类别分组。</p>
+          <p className="text-slate-500 text-sm">全量资产管理与分析。</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+            {/* Group By Toggle */}
+            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
+                <button 
+                    onClick={() => setGroupBy('category')}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                        groupBy === 'category' ? 'bg-slate-100 text-slate-800' : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                >
+                    <LayoutGrid size={16} />
+                    <span className="hidden sm:inline">按类别</span>
+                </button>
+                <button 
+                    onClick={() => setGroupBy('layer')}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                        groupBy === 'layer' ? 'bg-slate-100 text-slate-800' : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                >
+                    <Layers size={16} />
+                    <span className="hidden sm:inline">按层级</span>
+                </button>
+            </div>
+
              {/* Filter Toggle */}
              <button 
                 onClick={() => setShowHeldOnly(!showHeldOnly)}
@@ -376,38 +471,39 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, o
             onChange={e => setSearchTerm(e.target.value)}
           />
       </div>
+      
+      {/* Sub-header for Strategy Mode */}
+      {groupBy === 'layer' && activeStrategy && (
+           <div className="mb-6 bg-indigo-50 border border-indigo-100 rounded-lg p-3 flex items-center gap-3 text-sm text-indigo-800">
+               <Layers size={18} />
+               <span>当前分组依据策略：<strong>{activeStrategy.name}</strong></span>
+           </div>
+      )}
 
-      {/* Vertical Stack Layout with Responsive Grid - Removed internal scrollbar, using window scroll */}
+      {/* Vertical Stack Layout */}
       <div className="space-y-6">
-        {CATEGORIES.map(cat => {
-            const items = columns.get(cat.value) || [];
-            
-            // If no items match (and we are searching, or just empty in general), hide the section to keep it clean
-            if (items.length === 0) return null;
-            
-            return (
-                <div key={cat.value} className="bg-slate-50/50 rounded-xl border border-slate-100 p-4">
-                    {/* Section Header */}
-                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-200/60">
-                         <div className={`p-1.5 rounded-lg ${cat.color}`}>
-                             <cat.icon size={16} />
-                         </div>
-                         <h3 className="font-bold text-slate-700">{cat.label}</h3>
-                         <span className="bg-white text-slate-400 text-xs px-2 py-0.5 rounded-full border border-slate-200 shadow-sm ml-auto">
-                           {items.length}
-                         </span>
-                    </div>
-
-                    {/* Responsive Grid - Using Original Detailed Cards - Adjusted Grid for larger cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {items.map(asset => renderAssetCard(asset))}
-                    </div>
+        {displaySections.map(section => (
+            <div key={section.id} className="bg-slate-50/50 rounded-xl border border-slate-100 p-4">
+                {/* Section Header */}
+                <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-200/60">
+                        <div className={`p-1.5 rounded-lg ${section.color}`}>
+                            <section.icon size={16} />
+                        </div>
+                        <h3 className="font-bold text-slate-700">{section.label}</h3>
+                        <span className="bg-white text-slate-400 text-xs px-2 py-0.5 rounded-full border border-slate-200 shadow-sm ml-auto">
+                        {section.items.length}
+                        </span>
                 </div>
-            )
-        })}
+
+                {/* Responsive Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {section.items.map(asset => renderAssetCard(asset))}
+                </div>
+            </div>
+        ))}
         
         {/* Empty State if all filtered out */}
-        {assets.length > 0 && Array.from(columns.values()).every((list: Asset[]) => list.length === 0) && (
+        {assets.length > 0 && displaySections.length === 0 && (
             <div className="text-center py-20 text-slate-400">
                 <Search size={48} className="mx-auto mb-4 opacity-20" />
                 <p>

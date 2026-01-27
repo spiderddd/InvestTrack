@@ -179,6 +179,7 @@ const App: React.FC = () => {
           <AssetManager 
             assets={assets}
             snapshots={snapshots}
+            strategies={strategyVersions}
             onUpdate={loadData}
             onCreate={handleCreateAsset}
             onEdit={handleEditAsset}
