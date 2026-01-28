@@ -250,7 +250,7 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
         if (!layer) return [];
         
         return layer.items.map(item => {
-            const assetIds = new Set([item.assetId]);
+            const assetIds = new Set<string>([item.assetId]);
             const end = getStats(endSnapshot, assetIds);
             const start = getStats(startSnap, assetIds);
             
@@ -268,7 +268,7 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
     } else {
         // LAYERS Breakdown
         return appliedStrategy!.layers.map((layer, idx) => {
-            const assetIds = new Set(layer.items.map(i => i.assetId));
+            const assetIds = new Set<string>(layer.items.map(i => i.assetId));
             const end = getStats(endSnapshot, assetIds);
             const start = getStats(startSnap, assetIds);
             

@@ -100,17 +100,41 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
   const assetPerformanceMap = useMemo(() => {
     const map = new Map<string, AssetPerformance>();
     
+    // Core function to merge snapshot data into the map
     const processSnapshot = (s: SnapshotItem, isHist: boolean) => {
         s.assets.forEach(a => {
             if (a.quantity > 0) {
-                map.set(a.assetId, {
-                    quantity: a.quantity,
-                    marketValue: a.marketValue,
-                    totalCost: a.totalCost,
-                    unitPrice: a.unitPrice,
-                    date: s.date,
-                    isHistorical: isHist
-                });
+                const existing = map.get(a.assetId);
+
+                // Check if we need to aggregate (Same Date means same snapshot context, likely split across strategy layers)
+                // If dates match, it means we have multiple records for the same asset in one snapshot. We must SUM them.
+                if (existing && existing.date === s.date) {
+                    const totalQ = existing.quantity + a.quantity;
+                    const totalMV = existing.marketValue + a.marketValue;
+                    const totalCost = existing.totalCost + a.totalCost;
+                    
+                    map.set(a.assetId, {
+                        quantity: totalQ,
+                        marketValue: totalMV,
+                        totalCost: totalCost,
+                        // Recalculate implied unit price
+                        unitPrice: totalQ > 0 ? totalMV / totalQ : a.unitPrice, 
+                        date: s.date,
+                        isHistorical: isHist
+                    });
+                } else {
+                    // New entry OR Overwriting an OLDER entry (since we iterate chronologically usually, or if logic dictates replacement)
+                    // In "Latest" mode below, we iterate all sorted snapshots. Later dates overwrite earlier dates.
+                    // This is correct behavior to get the "Final State".
+                    map.set(a.assetId, {
+                        quantity: a.quantity,
+                        marketValue: a.marketValue,
+                        totalCost: a.totalCost,
+                        unitPrice: a.unitPrice,
+                        date: s.date,
+                        isHistorical: isHist
+                    });
+                }
             }
         });
     };
@@ -119,22 +143,30 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
         if (viewSnapshot) processSnapshot(viewSnapshot, false);
     } else {
         // "Latest" Mode logic
+        // We iterate ALL snapshots from oldest to newest. 
+        // This ensures the map ends up with the latest state for every asset ever held.
+        // If an asset was held in Jan but sold in Feb, the Jan record remains in the map (marked historical), 
+        // but Feb record (if quantity > 0) would overwrite it.
         const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
         sorted.forEach(s => {
+            // We mark all as historical first; the final result's 'isHistorical' flag isn't strictly used for 
+            // "held right now" check in the loop, but we correct it for the very latest snapshot below.
             processSnapshot(s, true); 
         });
+
+        // After building the full history map, check if the asset actually exists in the *latest* snapshot.
+        // If it does, mark isHistorical = false.
         if (sorted.length > 0) {
             const latest = sorted[sorted.length - 1];
+            // We do a pass on the latest snapshot again to strictly ensure 'isHistorical' is false
+            // and to ensure any aggregation for the latest month is finalized correctly.
+            // Note: The loop above already added latest data, but let's ensure the flag is correct.
             latest.assets.forEach(a => {
-                if (a.quantity > 0) {
-                    map.set(a.assetId, {
-                        quantity: a.quantity,
-                        marketValue: a.marketValue,
-                        totalCost: a.totalCost,
-                        unitPrice: a.unitPrice,
-                        date: latest.date,
-                        isHistorical: false 
-                    });
+                if (a.quantity > 0 && map.has(a.assetId)) {
+                   const rec = map.get(a.assetId)!;
+                   if (rec.date === latest.date) {
+                       rec.isHistorical = false;
+                   }
                 }
             });
         }
@@ -238,16 +270,28 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
     
     return snapshots
         .map(snap => {
-            const record = snap.assets.find(a => a.assetId === viewHistoryId);
-            if (!record) return null;
+            // Find ALL records for this asset in this snapshot and aggregate
+            const relevantRecords = snap.assets.filter(a => a.assetId === viewHistoryId);
+            if (relevantRecords.length === 0) return null;
+
+            const agg = relevantRecords.reduce((acc, curr) => ({
+                quantity: acc.quantity + curr.quantity,
+                marketValue: acc.marketValue + curr.marketValue,
+                totalCost: acc.totalCost + curr.totalCost,
+                // Unit price is tricky when aggregated, take weighted avg or just first (assuming same price)
+                unitPrice: curr.unitPrice 
+            }), { quantity: 0, marketValue: 0, totalCost: 0, unitPrice: 0 });
+
+            if (agg.quantity === 0 && agg.marketValue === 0) return null;
+
             return {
                 date: snap.date,
-                unitPrice: record.unitPrice,
-                quantity: record.quantity,
-                marketValue: record.marketValue,
-                totalCost: record.totalCost,
-                profit: record.marketValue - record.totalCost,
-                roi: record.totalCost > 0 ? ((record.marketValue - record.totalCost) / record.totalCost * 100) : 0
+                unitPrice: agg.unitPrice,
+                quantity: agg.quantity,
+                marketValue: agg.marketValue,
+                totalCost: agg.totalCost,
+                profit: agg.marketValue - agg.totalCost,
+                roi: agg.totalCost > 0 ? ((agg.marketValue - agg.totalCost) / agg.totalCost * 100) : 0
             } as AssetHistoryRecord;
         })
         .filter((item): item is AssetHistoryRecord => item !== null)
@@ -698,7 +742,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
                                         {[...selectedAssetHistory].reverse().map((row) => (
                                             <tr key={row.date} className="hover:bg-slate-50">
                                                 <td className="px-4 py-3 font-medium text-slate-700">{row.date}</td>
-                                                <td className="px-4 py-3 text-right">{row.unitPrice.toLocaleString()}</td>
+                                                <td className="px-4 py-3 text-right">{row.unitPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
                                                 <td className="px-4 py-3 text-right">{row.quantity.toLocaleString()}</td>
                                                 <td className="px-4 py-3 text-right text-slate-500">¥{row.totalCost.toLocaleString()}</td>
                                                 <td className="px-4 py-3 text-right font-bold text-slate-800">¥{row.marketValue.toLocaleString()}</td>
