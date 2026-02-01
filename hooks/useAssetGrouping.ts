@@ -31,94 +31,46 @@ export const useAssetGrouping = (assets: Asset[], _propsSnapshots: SnapshotItem[
   const [groupBy, setGroupBy] = useState<'category' | 'layer'>('category');
   const [selectedDate, setSelectedDate] = useState<string>('latest');
   
-  // We fetch full history snapshots (with assets) because the passed 'snapshots' are likely paginated/lightweight
-  const [fullSnapshots, setFullSnapshots] = useState<SnapshotItem[]>([]);
+  // States to hold server-fetched data
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [viewSnapshot, setViewSnapshot] = useState<SnapshotItem | null>(null);
 
+  // 1. Fetch available dates (Lightweight)
   useEffect(() => {
-    StorageService.getSnapshotsHistory().then(data => setFullSnapshots(data));
-  }, []); // Run once on mount
+    StorageService.getSnapshotDates().then(dates => setAvailableDates(dates));
+  }, []);
 
-  const availableDates = useMemo(() => {
-    return fullSnapshots
-      .map(s => s.date)
-      .sort((a, b) => b.localeCompare(a));
-  }, [fullSnapshots]);
+  // 2. Fetch snapshot details when date changes (On-Demand Calculation)
+  useEffect(() => {
+    StorageService.getSnapshotByDate(selectedDate).then(details => {
+        setViewSnapshot(details);
+    });
+  }, [selectedDate]);
 
   const activeStrategy = useMemo(() => {
       return strategies.find(s => s.status === 'active') || strategies[strategies.length - 1];
   }, [strategies]);
 
-  const viewSnapshot = useMemo(() => {
-    if (!fullSnapshots || fullSnapshots.length === 0) return null;
-    if (selectedDate === 'latest') {
-        return [...fullSnapshots].sort((a, b) => b.date.localeCompare(a.date))[0];
-    }
-    return fullSnapshots.find(s => s.date === selectedDate) || null;
-  }, [fullSnapshots, selectedDate]);
-
+  // Optimized: Map directly from the fetched single snapshot, no more client-side history traversal
   const assetPerformanceMap = useMemo(() => {
     const map = new Map<string, AssetPerformance>();
     
-    const processSnapshot = (s: SnapshotItem, isHist: boolean) => {
-        // Safe check for undefined assets
-        if (!s.assets) return;
-
-        s.assets.forEach(a => {
-            if (a.quantity > 0) {
-                const existing = map.get(a.assetId);
-
-                if (existing && existing.date === s.date) {
-                    const totalQ = existing.quantity + a.quantity;
-                    const totalMV = existing.marketValue + a.marketValue;
-                    const totalCost = existing.totalCost + a.totalCost;
-                    
-                    map.set(a.assetId, {
-                        quantity: totalQ,
-                        marketValue: totalMV,
-                        totalCost: totalCost,
-                        unitPrice: totalQ > 0 ? totalMV / totalQ : a.unitPrice, 
-                        date: s.date,
-                        isHistorical: isHist
-                    });
-                } else {
-                    map.set(a.assetId, {
-                        quantity: a.quantity,
-                        marketValue: a.marketValue,
-                        totalCost: a.totalCost,
-                        unitPrice: a.unitPrice,
-                        date: s.date,
-                        isHistorical: isHist
-                    });
-                }
-            }
-        });
-    };
-
-    if (selectedDate !== 'latest') {
-        if (viewSnapshot) processSnapshot(viewSnapshot, false);
-    } else {
-        const sorted = [...fullSnapshots].sort((a, b) => a.date.localeCompare(b.date));
-        sorted.forEach(s => {
-            processSnapshot(s, true); 
-        });
-
-        if (sorted.length > 0) {
-            const latest = sorted[sorted.length - 1];
-            // Ensure latest has assets before accessing
-            if (latest && latest.assets) {
-                latest.assets.forEach(a => {
-                    if (a.quantity > 0 && map.has(a.assetId)) {
-                        const rec = map.get(a.assetId)!;
-                        if (rec.date === latest.date) {
-                            rec.isHistorical = false;
-                        }
-                    }
+    if (viewSnapshot && viewSnapshot.assets) {
+        viewSnapshot.assets.forEach(a => {
+            if (a.quantity !== 0) { // Keep even if very small? Usually > 0 or < 0
+                 map.set(a.assetId, {
+                    quantity: a.quantity,
+                    marketValue: a.marketValue,
+                    totalCost: a.totalCost,
+                    unitPrice: a.unitPrice,
+                    date: viewSnapshot.date,
+                    isHistorical: selectedDate !== 'latest'
                 });
             }
-        }
+        });
     }
     return map;
-  }, [fullSnapshots, selectedDate, viewSnapshot]);
+  }, [viewSnapshot, selectedDate]);
 
   const displaySections = useMemo(() => {
     let sections: any[] = [];

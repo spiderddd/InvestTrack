@@ -5,6 +5,20 @@ import { sendSuccess, sendError } from '../utils/responseHelper.js';
 
 const router = express.Router();
 
+// GET /api/dashboard/overview (Consolidated)
+router.get('/overview', async (req, res) => {
+    try {
+        const { viewMode, timeRange, layerId, startDate } = req.query;
+        const data = await DashboardService.getOverview({ 
+            viewMode: viewMode || 'strategy', 
+            timeRange: timeRange || 'all',
+            layerId: layerId || null,
+            startDate: startDate || null
+        });
+        sendSuccess(res, data);
+    } catch (e) { sendError(res, e, "Get Overview"); }
+});
+
 // GET /api/dashboard/metrics
 router.get('/metrics', async (req, res) => {
     try {

@@ -34,6 +34,27 @@ const getAssetTargetMap = (strategy) => {
 };
 
 export const DashboardService = {
+    // Aggregated Endpoint to reduce network roundtrips
+    getOverview: async ({ viewMode, timeRange, layerId, startDate }) => {
+        // 1. Fetch Metrics
+        const metrics = await DashboardService.getMetrics({ viewMode, timeRange });
+        
+        // 2. Fetch Allocation
+        const allocation = await DashboardService.getAllocation({ viewMode, layerId });
+        
+        // 3. Fetch Trend
+        const trend = await DashboardService.getTrend({ viewMode, layerId, startDate });
+
+        // Note: Breakdown is usually displayed in a separate tab or below fold, 
+        // and might be heavy, so we keep it optional or fetch it separately if needed.
+        // For now, we return these three core components.
+        return {
+            metrics,
+            allocation,
+            trend
+        };
+    },
+
     // 1. 核心指标 (Metrics)
     getMetrics: async ({ viewMode, timeRange }) => {
         const { items: snapshots } = await SnapshotService.getList(1, 1000); // Get light list
@@ -65,16 +86,6 @@ export const DashboardService = {
         const endDetails = await SnapshotService.getDetails(endSnapshotSimple.id);
         const startDetails = startSnapshotSimple ? await SnapshotService.getDetails(startSnapshotSimple.id) : null;
         
-        const calcValue = (s) => {
-            if(!s) return { v: 0, i: 0 };
-            if(viewMode === 'total') return { v: s.totalValue, i: s.totalInvested };
-            
-            // Strategy Mode
-            const strategies = AsyncHelpers.getStrategiesSync(); // We need a way to get strategies inside here. 
-            // Limitation: Async inside sync map logic. Let's fetch strategies first.
-            return { v: 0, i: 0 }; // Placeholder, logic moved below
-        };
-
         const strategies = await StrategyService.getAll();
         
         const filterStrategyAssets = (snapshot) => {
@@ -227,14 +238,9 @@ export const DashboardService = {
                 // If filtering by Layer
                 let targetAssetIds = null;
                 if (layerId && latestStrat) {
-                    // We assume layers are structurally similar across versions for ID filtering, 
-                    // or we use the latest strategy to define what "Core Defense" means today.
-                    // A more accurate way is finding the layer in stratAtTime by NAME.
-                    // For simplicity, we use the assets currently associated with that layer ID in the latest strategy,
-                    // OR we check if the asset in the snapshot belongs to the layer in the strategy AT THAT TIME.
                     // Method B: Filter by Strategy at Time
                      if(stratAtTime) {
-                        const layerAtTime = stratAtTime.layers.find(l => l.id === layerId); // ID might persist if cloned
+                        const layerAtTime = stratAtTime.layers.find(l => l.id === layerId); 
                         if(layerAtTime && layerAtTime.items) {
                             targetAssetIds = new Set(layerAtTime.items.map(i => i.assetId));
                         }
@@ -385,9 +391,4 @@ export const DashboardService = {
              }
         }
     }
-};
-
-// Async helper workaround class
-const AsyncHelpers = {
-    getStrategiesSync: () => [] 
 };

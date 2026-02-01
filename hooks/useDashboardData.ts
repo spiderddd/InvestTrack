@@ -42,22 +42,23 @@ export const useDashboardData = (strategies: StrategyVersion[], snapshots: Snaps
       return getStrategyForDate(strategies, sorted[0].date);
   }, [strategies, snapshots]);
 
-  // Fetch Data Effect
+  // Fetch Data Effect - Optimized to single request
   useEffect(() => {
     let isMounted = true;
     
     const fetchData = async () => {
         setLoadingDetails(true);
         try {
-            const [metrics, alloc, trend, breakdown] = await Promise.all([
-                StorageService.getDashboardMetrics(viewMode, timeRange),
-                StorageService.getDashboardAllocation(viewMode, selectedLayerId),
-                StorageService.getDashboardTrend(viewMode, selectedLayerId, rangeConfig.startDate),
+            // OPTIMIZATION: Fetch Overview (Metrics + Allocation + Trend) in one go
+            // Breakdown is fetched separately as it can be heavy and distinct from visualization
+            const [overview, breakdown] = await Promise.all([
+                StorageService.getDashboardOverview(viewMode, timeRange, selectedLayerId, rangeConfig.startDate),
                 StorageService.getDashboardBreakdown(viewMode, timeRange, selectedLayerId)
             ]);
 
             if (isMounted) {
-                // Map backend metrics to UI expectations
+                const { metrics, allocation, trend } = overview;
+
                 setEndMetrics({
                     value: metrics.endValue,
                     invested: metrics.endInvested,
@@ -65,10 +66,9 @@ export const useDashboardData = (strategies: StrategyVersion[], snapshots: Snaps
                     returnRate: metrics.returnRate,
                     periodLabel: metrics.periodLabel
                 });
-                // Start metrics are implicit in the profit calc now, but UI might expect object structure
                 setStartMetrics({ value: 0, invested: 0 }); 
 
-                setAllocationData(alloc);
+                setAllocationData(allocation);
                 setHistoryData(trend);
                 setBreakdownData(breakdown);
             }

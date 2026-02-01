@@ -26,6 +26,12 @@ export const SnapshotService = {
         return { items, total, page: parseInt(page), limit: parseInt(limit) };
     },
 
+    // New: Lightweight list for dropdowns
+    getDatesOnly: async () => {
+        const rows = await getQuery("SELECT date FROM snapshots ORDER BY date DESC");
+        return rows.map(r => r.date);
+    },
+
     // Optimized: Get nearest previous snapshot without fetching full history list
     getPrevious: async (date) => {
         const sql = `
@@ -161,6 +167,20 @@ export const SnapshotService = {
 
         snapshot.assets = fullAssets;
         return snapshot;
+    },
+
+    // New helper for asset manager time travel
+    getDetailsByDate: async (date) => {
+        if (!date) throw { statusCode: 400, message: "Date required" };
+        let rows;
+        if (date === 'latest') {
+            rows = await getQuery("SELECT id FROM snapshots ORDER BY date DESC LIMIT 1");
+        } else {
+            rows = await getQuery("SELECT id FROM snapshots WHERE date = ?", [date]);
+        }
+        
+        if (rows.length === 0) return null;
+        return await SnapshotService.getDetails(rows[0].id);
     },
 
     // Treat 'snapshots' table as a Write-Through Cache

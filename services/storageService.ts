@@ -12,7 +12,22 @@ export const generateId = (): string => {
 };
 
 export const StorageService = {
-  // --- Dashboard API (New) ---
+  // --- Dashboard API (New Consolidated) ---
+  getDashboardOverview: async (viewMode: string, timeRange: string, layerId: string | null, startDate: string | null) => {
+    try {
+        let url = `${API_BASE}/dashboard/overview?viewMode=${viewMode}&timeRange=${timeRange}`;
+        if (layerId) url += `&layerId=${layerId}`;
+        if (startDate) url += `&startDate=${startDate}`;
+        
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch overview');
+        return await res.json();
+    } catch (e) { 
+        console.error(e); 
+        return { metrics: { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 }, allocation: [], trend: [] }; 
+    }
+  },
+
   getDashboardMetrics: async (viewMode: string, timeRange: string) => {
       try {
           const res = await fetch(`${API_BASE}/dashboard/metrics?viewMode=${viewMode}&timeRange=${timeRange}`);
@@ -165,6 +180,24 @@ export const StorageService = {
       if (!res.ok) throw new Error('Failed to fetch snapshots history');
       return await res.json();
     } catch (e) { console.error(e); return []; }
+  },
+
+  // New: Lightweight Date List (For Dropdowns)
+  getSnapshotDates: async (): Promise<string[]> => {
+    try {
+        const res = await fetch(`${API_BASE}/snapshots/dates`);
+        if (!res.ok) throw new Error('Failed to fetch snapshot dates');
+        return await res.json();
+    } catch (e) { console.error(e); return []; }
+  },
+
+  // New: Get Details by Date (For Asset Manager "Time Travel")
+  getSnapshotByDate: async (date: string): Promise<SnapshotItem | null> => {
+      try {
+          const res = await fetch(`${API_BASE}/snapshots/details-by-date?date=${date}`);
+          if (!res.ok) throw new Error('Failed to fetch snapshot details by date');
+          return await res.json();
+      } catch (e) { console.error(e); return null; }
   },
 
   // Gets Full Details (For Single View)

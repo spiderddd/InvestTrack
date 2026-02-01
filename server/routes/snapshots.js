@@ -14,6 +14,13 @@ router.get('/', async (req, res) => {
     } catch (e) { sendError(res, e, "Get Snapshots"); }
 });
 
+router.get('/dates', async (req, res) => {
+    try {
+        const data = await SnapshotService.getDatesOnly();
+        sendSuccess(res, data);
+    } catch (e) { sendError(res, e, "Get Snapshot Dates"); }
+});
+
 router.get('/history', async (req, res) => {
     try {
         const data = await SnapshotService.getHistoryGraph();
@@ -33,6 +40,14 @@ router.get('/previous/:date', async (req, res) => {
         const data = await SnapshotService.getPrevious(req.params.date);
         sendSuccess(res, data || {}); // Return empty object if no previous found
     } catch (e) { sendError(res, e, "Get Previous Snapshot"); }
+});
+
+router.get('/details-by-date', async (req, res) => {
+    try {
+        const { date } = req.query;
+        const data = await SnapshotService.getDetailsByDate(date);
+        sendSuccess(res, data); // Null is valid if no snapshot
+    } catch (e) { sendError(res, e, "Get Snapshot By Date"); }
 });
 
 router.get('/:id', async (req, res) => {
