@@ -29,32 +29,13 @@ const AppContent: React.FC = () => {
 
   // Wrappers to refresh specific data after updates
   const handleUpdateStrategies = async (newVersions: StrategyVersion[]) => {
-      // Logic to handle Create / Update / Delete based on list diff
-      const oldIds = new Set(strategies.map(v => v.id));
-      const newIds = new Set(newVersions.map(v => v.id));
-
-      // 1. Handle Creates & Updates
-      for (const v of newVersions) {
-          const old = strategies.find(o => o.id === v.id);
-          if (!old) {
-              await StorageService.createStrategy(v);
-          } else if (JSON.stringify(old) !== JSON.stringify(v)) {
-              await StorageService.updateStrategy(v);
-          }
-      }
-
-      // 2. Handle Deletes
-      for (const old of strategies) {
-          if (!newIds.has(old.id)) {
-              await StorageService.deleteStrategy(old.id);
-          }
-      }
-
+      // Logic moved to Service to keep UI Component clean
+      await StorageService.syncStrategies(strategies, newVersions);
       // Only refresh strategies, assets and snapshots remain cached
       await refreshStrategies();
   };
 
-  const handleUpdateSnapshots = async (newSnapshots: SnapshotItem[]) => {
+  const handleUpdateSnapshots = async (_newSnapshots: SnapshotItem[]) => {
      // This callback is usually triggered by bulk updates, currently we mostly use handleSaveSnapshot
      await refreshSnapshots();
   };

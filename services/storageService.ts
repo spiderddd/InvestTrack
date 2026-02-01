@@ -4,6 +4,10 @@ import { StrategyVersion, SnapshotItem, Asset } from '../types';
 const API_BASE = '/api'; 
 
 export const generateId = (): string => {
+  // Use modern crypto API for consistent ID generation
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 };
 
@@ -103,24 +107,44 @@ export const StorageService = {
     } catch (e) { console.error(e); return []; }
   },
 
+  // Encapsulated Business Logic: Sync Strategies (Diffing)
+  syncStrategies: async (currentList: StrategyVersion[], newVersions: StrategyVersion[]) => {
+      const oldIds = new Set(currentList.map(v => v.id));
+      const newIds = new Set(newVersions.map(v => v.id));
+
+      // 1. Handle Creates & Updates
+      for (const v of newVersions) {
+          const old = currentList.find(o => o.id === v.id);
+          if (!old) {
+              await fetch(`${API_BASE}/strategies`, {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify(v)
+              });
+          } else if (JSON.stringify(old) !== JSON.stringify(v)) {
+              await fetch(`${API_BASE}/strategies/${v.id}`, {
+                  method: 'PUT',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify(v)
+              });
+          }
+      }
+
+      // 2. Handle Deletes
+      for (const old of currentList) {
+          if (!newIds.has(old.id)) {
+              await fetch(`${API_BASE}/strategies/${old.id}`, { method: 'DELETE' });
+          }
+      }
+  },
+
+  // Low-level method (Internal use or specific overrides)
   createStrategy: async (strategy: StrategyVersion) => {
     await fetch(`${API_BASE}/strategies`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(strategy)
     });
-  },
-
-  updateStrategy: async (strategy: StrategyVersion) => {
-      await fetch(`${API_BASE}/strategies/${strategy.id}`, {
-          method: 'PUT',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(strategy)
-      });
-  },
-
-  deleteStrategy: async (id: string) => {
-      await fetch(`${API_BASE}/strategies/${id}`, { method: 'DELETE' });
   },
 
   // --- Snapshots ---
