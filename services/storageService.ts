@@ -153,15 +153,6 @@ export const StorageService = {
       }
   },
 
-  // Low-level method (Internal use or specific overrides)
-  createStrategy: async (strategy: StrategyVersion) => {
-    await fetch(`${API_BASE}/strategies`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(strategy)
-    });
-  },
-
   // --- Snapshots ---
   
   // Gets Lightweight List (For List View) - Paginated

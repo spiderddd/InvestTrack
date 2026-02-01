@@ -1,10 +1,11 @@
 
 import React, { useState } from 'react';
-import { LayoutDashboard, PieChart, History, Wallet, Wifi, Briefcase } from 'lucide-react';
+import { LayoutDashboard, PieChart, History, Wallet, Wifi, Briefcase, BookOpen } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import StrategyManager from './components/StrategyManager';
 import SnapshotManager from './components/SnapshotManager';
 import { AssetManager } from './components/AssetManager';
+import { ProjectGuide } from './components/ProjectGuide';
 import { StorageService } from './services/storageService';
 import { StrategyVersion, SnapshotItem, Asset } from './types';
 import { DataProvider, useData } from './contexts/DataContext';
@@ -13,6 +14,7 @@ type View = 'dashboard' | 'strategy' | 'snapshots' | 'assets';
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('dashboard');
+  const [showGuide, setShowGuide] = useState(false);
   
   // Consume data from Context
   const { 
@@ -111,21 +113,31 @@ const AppContent: React.FC = () => {
             </h1>
           </div>
           
-          <nav className="flex gap-1">
-            {(['dashboard', 'assets', 'strategy', 'snapshots'] as View[]).map((view) => (
-              <button
-                key={view}
-                onClick={() => setActiveView(view)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeView === view
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {getNavLabel(view)}
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center gap-4">
+            <nav className="flex gap-1">
+              {(['dashboard', 'assets', 'strategy', 'snapshots'] as View[]).map((view) => (
+                <button
+                  key={view}
+                  onClick={() => setActiveView(view)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeView === view
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {getNavLabel(view)}
+                </button>
+              ))}
+            </nav>
+            <div className="h-6 w-px bg-slate-200 mx-2"></div>
+            <button 
+              onClick={() => setShowGuide(true)}
+              className="flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors text-sm font-medium"
+            >
+              <BookOpen size={18} />
+              <span>手册</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -137,6 +149,9 @@ const AppContent: React.FC = () => {
             </div>
             <span className="font-bold text-slate-800">InvestTrack</span>
           </div>
+          <button onClick={() => setShowGuide(true)} className="text-slate-500">
+            <BookOpen size={20} />
+          </button>
       </header>
 
       {/* Main Content */}
@@ -183,6 +198,9 @@ const AppContent: React.FC = () => {
       </nav>
       
       <div className="h-20 md:hidden"></div>
+
+      {/* Guide Modal */}
+      {showGuide && <ProjectGuide onClose={() => setShowGuide(false)} />}
     </div>
   );
 };

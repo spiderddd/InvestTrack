@@ -41,7 +41,6 @@ db.serialize(() => {
     try {
         // 1. 清空现有数据 (顺序很重要)
         console.log("🧹 清空现有表数据...");
-        // db.run("DELETE FROM positions"); // LEGACY TABLE REMOVED
         db.run("DELETE FROM transactions");
         db.run("DELETE FROM market_prices");
         db.run("DELETE FROM snapshots");

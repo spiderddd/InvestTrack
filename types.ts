@@ -51,7 +51,6 @@ export interface AssetRecord {
   // De-normalized info for UI convenience
   name: string;
   category: AssetCategory;
-  // strategyId removed: Mapped dynamically in UI based on Asset ID
   
   // State
   unitPrice: number;

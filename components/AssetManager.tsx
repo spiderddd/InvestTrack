@@ -70,41 +70,23 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
         setLoadingHistory(true);
         StorageService.getAssetHistory(viewHistoryId)
             .then(data => {
-                const aggMap = new Map<string, AssetHistoryRecord>();
+                // Backend now returns pre-processed snapshot history.
+                // We just need to compute client-side derived fields (ROI, Profit) for display.
+                const formatted: AssetHistoryRecord[] = data.map((row: any) => ({
+                    date: row.date,
+                    unitPrice: row.unitPrice,
+                    quantity: row.quantity,
+                    marketValue: row.marketValue,
+                    totalCost: row.totalCost,
+                    profit: row.marketValue - row.totalCost,
+                    roi: row.totalCost > 0 ? ((row.marketValue - row.totalCost) / row.totalCost * 100) : 0,
+                    addedQuantity: row.addedQuantity,
+                    addedPrincipal: row.addedPrincipal,
+                    note: row.note || ''
+                }));
                 
-                data.forEach((row: any) => {
-                    const existing = aggMap.get(row.date);
-                    if (existing) {
-                        existing.quantity += row.quantity;
-                        existing.marketValue += row.marketValue;
-                        existing.totalCost += row.totalCost;
-                        existing.addedQuantity += row.addedQuantity;
-                        existing.addedPrincipal += row.addedPrincipal;
-                        existing.profit = existing.marketValue - existing.totalCost;
-                        existing.roi = existing.totalCost > 0 ? (existing.profit / existing.totalCost * 100) : 0;
-                        existing.unitPrice = existing.quantity > 0 ? existing.marketValue / existing.quantity : row.unitPrice;
-                        // Concatenate notes if merging records
-                        if (row.note) {
-                            existing.note = existing.note ? existing.note + '; ' + row.note : row.note;
-                        }
-                    } else {
-                        aggMap.set(row.date, {
-                            date: row.date,
-                            unitPrice: row.unitPrice,
-                            quantity: row.quantity,
-                            marketValue: row.marketValue,
-                            totalCost: row.totalCost,
-                            profit: row.marketValue - row.totalCost,
-                            roi: row.totalCost > 0 ? ((row.marketValue - row.totalCost) / row.totalCost * 100) : 0,
-                            addedQuantity: row.addedQuantity,
-                            addedPrincipal: row.addedPrincipal,
-                            note: row.note || ''
-                        });
-                    }
-                });
-                
-                const sortedHistory = Array.from(aggMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-                setHistoryData(sortedHistory);
+                // Ensure Sorted by Date
+                setHistoryData(formatted.sort((a, b) => a.date.localeCompare(b.date)));
             })
             .catch(err => {
                 console.error("Failed to load history", err);
