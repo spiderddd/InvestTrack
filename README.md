@@ -163,16 +163,47 @@ node scripts/seed_data.js
 
 会生成：7个资产、1套策略、6个月的账本数据。
 
-### 导入历史数据
+### 导出备份数据
 
-如有符合格式的 JSON 备份（`data_export.json`）：
+通过 API 导出完整数据为 JSON 文件：
 
 ```bash
-# 注意：会清空现有数据库，请提前备份
-node scripts/import_data.js
+# 导出完整备份（包含所有市价和交易记录）
+curl http://localhost:3001/api/export/backup > backup_$(date +%Y-%m-%d).json
+
+# 导出的 JSON 格式可直接用于恢复
 ```
 
-### 数据库备份
+**备份文件格式：**
+```json
+{
+  "_meta": { "version": "1.0", "exportedAt": "...", "type": "invest_track_backup" },
+  "assets": [{ "type", "name", "ticker", "note" }],
+  "strategies": [{ "name", "description", "startDate", "status", "layers": [{ "name", "weight", "description", "items": [{ "assetId", "targetName", "weight", "color", "note" }] }] }],
+  "snapshots": {
+    "snapshots": [{ "date", "note" }],
+    "prices": [{ "assetId", "date", "price" }],
+    "transactions": [{ "assetId", "date", "type", "quantityChange", "costChange", "note" }]
+  }
+}
+```
+
+### 恢复/导入数据
+
+使用 `seed_data.js` 脚本从备份文件恢复数据：
+
+```bash
+# 从备份文件恢复数据（数据库完全清空后重新导入）
+node scripts/seed_data.js backup_2024-06-01.json
+```
+
+**支持两种模式：**
+| 模式 | 命令 | 说明 |
+| :--- | :--- | :--- |
+| **模拟数据** | `node scripts/seed_data.js` | 使用内置的7资产+6月账本数据 |
+| **备份恢复** | `node scripts/seed_data.js xxx.json` | 从指定JSON文件导入数据 |
+
+### 数据库手动备份
 
 直接备份 `data/` 目录下的 `invest_track_v2.db` 文件即可。
 

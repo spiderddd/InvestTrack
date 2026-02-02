@@ -1,0 +1,99 @@
+{
+  "_meta": {
+    "version": "2.0",
+    "exportedAt": "2024-06-30T00:00:00.000Z",
+    "type": "invest_track_backup"
+  },
+  "assets": [
+    { "type": "fund", "name": "沪深300ETF", "ticker": "510300", "note": "A股核心宽基", "prices": [
+      { "date": "2024-06", "price": 3.3277 }, { "date": "2024-05", "price": 3.4327 },
+      { "date": "2024-04", "price": 3.397 }, { "date": "2024-03", "price": 3.5192 },
+      { "date": "2024-02", "price": 3.4891 }, { "date": "2024-01", "price": 3.376 }
+    ]},
+    { "type": "fund", "name": "纳指100ETF", "ticker": "513100", "note": "美股科技成长", "prices": [
+      { "date": "2024-06", "price": 1.16 }, { "date": "2024-05", "price": 1.2037 },
+      { "date": "2024-04", "price": 1.2609 }, { "date": "2024-03", "price": 1.2807 },
+      { "date": "2024-02", "price": 1.2161 }, { "date": "2024-01", "price": 1.1534 }
+    ]},
+    { "type": "security", "name": "腾讯控股", "ticker": "00700.HK", "note": "港股互联网龙头", "prices": [
+      { "date": "2024-06", "price": 367.4824 }, { "date": "2024-05", "price": 354.3937 },
+      { "date": "2024-04", "price": 343.2282 }, { "date": "2024-03", "price": 323.2041 },
+      { "date": "2024-02", "price": 300.2975 }, { "date": "2024-01", "price": 298.3178 }
+    ]},
+    { "type": "wealth", "name": "招商银行理财", "ticker": "", "note": "R2稳健型", "prices": [
+      { "date": "2024-06", "price": 1 }, { "date": "2024-05", "price": 1 },
+      { "date": "2024-04", "price": 1 }, { "date": "2024-03", "price": 1 },
+      { "date": "2024-02", "price": 1 }, { "date": "2024-01", "price": 1 }
+    ]},
+    { "type": "gold", "name": "实物黄金", "ticker": "", "note": "避险资产", "prices": [
+      { "date": "2024-06", "price": 490.8873 }, { "date": "2024-05", "price": 498.6968 },
+      { "date": "2024-04", "price": 523.4488 }, { "date": "2024-03", "price": 501.1335 },
+      { "date": "2024-02", "price": 522.0999 }, { "date": "2024-01", "price": 497.5638 }
+    ]},
+    { "type": "crypto", "name": "Bitcoin", "ticker": "BTC", "note": "数字黄金", "prices": [
+      { "date": "2024-06", "price": 572585.2491 }, { "date": "2024-05", "price": 533942.9602 },
+      { "date": "2024-04", "price": 523353.7741 }, { "date": "2024-03", "price": 494554.2681 },
+      { "date": "2024-02", "price": 478589.1628 }, { "date": "2024-01", "price": 470997.9085 }
+    ]},
+    { "type": "fixed", "name": "备用金(余额宝)", "ticker": "", "note": "流动资金", "prices": [
+      { "date": "2024-06", "price": 1 }, { "date": "2024-05", "price": 1 },
+      { "date": "2024-04", "price": 1 }, { "date": "2024-03", "price": 1 },
+      { "date": "2024-02", "price": 1 }, { "date": "2024-01", "price": 1 }
+    ]}
+  ],
+  "strategies": [{
+    "name": "2024 全球配置策略 (模拟)",
+    "description": "# 核心思想\n\n本策略采用 **核心-卫星** 架构。\n\n- **稳健层 (40%)**: 确定的收益，抗跌。\n- **进取层 (60%)**: 捕捉中美科技成长的红利。",
+    "startDate": "2024-01-01", "status": "active",
+    "layers": [
+      { "name": "第一层：稳健底仓", "weight": 40, "description": "提供安全垫，随时可用的流动性",
+        "items": [
+          { "targetName": "招商银行理财", "weight": 20, "color": "#64748b", "note": "长期理财" },
+          { "targetName": "备用金(余额宝)", "weight": 10, "color": "#94a3b8", "note": "随时取用" },
+          { "targetName": "实物黄金", "weight": 10, "color": "#f59e0b", "note": "抗通胀" }
+        ]},
+      { "name": "第二层：进取成长", "weight": 60, "description": "主要收益来源",
+        "items": [
+          { "targetName": "沪深300ETF", "weight": 20, "color": "#ef4444", "note": "做多中国" },
+          { "targetName": "纳指100ETF", "weight": 20, "color": "#3b82f6", "note": "AI 浪潮" },
+          { "targetName": "腾讯控股", "weight": 10, "color": "#8b5cf6", "note": "低估值反弹" },
+          { "targetName": "Bitcoin", "weight": 10, "color": "#f97316", "note": "非对称收益" }
+        ]}
+    ]
+  }],
+  "snapshots": [
+    { "date": "2024-06", "note": "# 2024-06 投资笔记\n\n半年总结：整体跑赢通胀，继续保持。",
+      "transactions": [
+        { "assetName": "实物黄金", "type": "adjustment", "quantityChange": 4.0743, "costChange": 2000, "note": "定投扣款" },
+        { "assetName": "纳指100ETF", "type": "adjustment", "quantityChange": 1724.1379, "costChange": 2000, "note": "定投扣款" }
+      ]},
+    { "date": "2024-05", "note": "# 2024-05 投资笔记\n\n发奖金了，买入一点理财。",
+      "transactions": [
+        { "assetName": "Bitcoin", "type": "adjustment", "quantityChange": 0.0037, "costChange": 2000, "note": "定投扣款" },
+        { "assetName": "实物黄金", "type": "adjustment", "quantityChange": 4.0105, "costChange": 2000, "note": "看好后世加仓" },
+        { "assetName": "招商银行理财", "type": "adjustment", "quantityChange": 5000, "costChange": 5000, "note": "定期存款" },
+        { "assetName": "腾讯控股", "type": "adjustment", "quantityChange": 5.6434, "costChange": 2000, "note": "看好后世加仓" },
+        { "assetName": "沪深300ETF", "type": "adjustment", "quantityChange": 582.6317, "costChange": 2000, "note": "定投扣款" }
+      ]},
+    { "date": "2024-04", "note": "# 2024-04 投资笔记\n\n黄金涨疯了，稍微止盈了一点。",
+      "transactions": [
+        { "assetName": "实物黄金", "type": "adjustment", "quantityChange": 3.8208, "costChange": 2000, "note": "看好后世加仓" }
+      ]},
+    { "date": "2024-03", "note": "# 2024-03 投资笔记\n\nA股这就3000点保卫战了？加仓！", "transactions": []},
+    { "date": "2024-02", "note": "# 2024-02 投资笔记\n\n美股持续新高，但这部分仓位不动。",
+      "transactions": [
+        { "assetName": "备用金(余额宝)", "type": "adjustment", "quantityChange": 60, "costChange": 0, "note": "" },
+        { "assetName": "Bitcoin", "type": "adjustment", "quantityChange": 0.0042, "costChange": 2000, "note": "定投扣款" }
+      ]},
+    { "date": "2024-01", "note": "# 2024-01 投资笔记\n\n建仓完成，期待今年表现。",
+      "transactions": [
+        { "assetName": "备用金(余额宝)", "type": "adjustment", "quantityChange": 20000, "costChange": 20000, "note": "初始建仓" },
+        { "assetName": "Bitcoin", "type": "adjustment", "quantityChange": 0.1, "costChange": 45000, "note": "初始建仓" },
+        { "assetName": "实物黄金", "type": "adjustment", "quantityChange": 50, "costChange": 24000, "note": "初始建仓" },
+        { "assetName": "招商银行理财", "type": "adjustment", "quantityChange": 50000, "costChange": 50000, "note": "初始建仓" },
+        { "assetName": "腾讯控股", "type": "adjustment", "quantityChange": 200, "costChange": 56000, "note": "初始建仓" },
+        { "assetName": "纳指100ETF", "type": "adjustment", "quantityChange": 20000, "costChange": 24000, "note": "初始建仓" },
+        { "assetName": "沪深300ETF", "type": "adjustment", "quantityChange": 10000, "costChange": 35000, "note": "初始建仓" }
+      ]}
+  ]
+}

@@ -1,6 +1,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { runQuery, getQuery, withTransaction } from '../db.js';
+import { lruCache } from '../utils/cache.js';
 
 export const SnapshotService = {
     getList: async (page = 1, limit = 20) => {
@@ -9,21 +10,54 @@ export const SnapshotService = {
         const total = countResult[0].count;
         
         const sql = `
-            SELECT id, date, total_value, total_invested, note
+            SELECT id, date, note
             FROM snapshots
             ORDER BY date DESC
             LIMIT ? OFFSET ?
         `;
         
         const rows = await getQuery(sql, [limit, offset]);
-        const items = rows.map(r => ({
-            id: r.id,
-            date: r.date,
-            totalValue: r.total_value,
-            totalInvested: r.total_invested,
-            note: r.note,
+        const items = await Promise.all(rows.map(async (r) => {
+            const totals = await SnapshotService.calculateTotals(r.date);
+            return {
+                id: r.id,
+                date: r.date,
+                totalValue: totals.totalValue,
+                totalInvested: totals.totalInvested,
+                note: r.note,
+            };
         }));
         return { items, total, page: parseInt(page), limit: parseInt(limit) };
+    },
+
+    calculateTotals: async (date) => {
+        const cacheKey = `totals:${date}`;
+        const cached = lruCache.get(cacheKey);
+        if (cached) return cached;
+
+        const holdingsSql = `
+            SELECT t.asset_id, SUM(t.quantity_change) as quantity, SUM(t.cost_change) as totalCost
+            FROM transactions t WHERE t.date <= ? GROUP BY t.asset_id
+        `;
+        const holdings = await getQuery(holdingsSql, [date]);
+        
+        let totalValue = 0;
+        let totalInvested = 0;
+
+        for (const h of holdings) {
+            if (Math.abs(h.quantity) < 0.000001) continue;
+            const priceRow = await getQuery(
+                `SELECT price FROM market_prices WHERE asset_id=? AND date<=? ORDER BY date DESC LIMIT 1`,
+                [h.asset_id, date]
+            );
+            const price = priceRow.length > 0 ? priceRow[0].price : 0;
+            totalValue += (h.quantity * price);
+            totalInvested += h.totalCost;
+        }
+
+        const result = { totalValue, totalInvested };
+        lruCache.set(cacheKey, result);
+        return result;
     },
 
     // New: Lightweight list for dropdowns
@@ -35,7 +69,7 @@ export const SnapshotService = {
     // Optimized: Get nearest previous snapshot without fetching full history list
     getPrevious: async (date) => {
         const sql = `
-            SELECT id, date, total_value, total_invested, note
+            SELECT id, date, note
             FROM snapshots
             WHERE date < ?
             ORDER BY date DESC
@@ -49,8 +83,11 @@ export const SnapshotService = {
     },
 
     getHistoryGraph: async () => {
-        // Optimized O(Transactions) traversal logic for graph generation
-        const snapshots = await getQuery("SELECT id, date, total_value, total_invested FROM snapshots ORDER BY date ASC");
+        const cacheKey = 'historyGraph';
+        const cached = lruCache.get(cacheKey);
+        if (cached) return cached;
+
+        const snapshots = await getQuery("SELECT id, date FROM snapshots ORDER BY date ASC");
         const allTxs = await getQuery("SELECT asset_id, date, quantity_change, cost_change FROM transactions ORDER BY date ASC");
         const allPrices = await getQuery("SELECT asset_id, date, price FROM market_prices ORDER BY date ASC");
         
@@ -79,6 +116,8 @@ export const SnapshotService = {
             }
 
             const assetsWithPrice = [];
+            let totalValue = 0;
+            let totalInvested = 0;
             for (const [assetId, state] of runningState.entries()) {
                 if (Math.abs(state.quantity) < 0.000001) continue;
                 const assetPrices = pricesByAsset.get(assetId) || [];
@@ -89,31 +128,41 @@ export const SnapshotService = {
                         break;
                     }
                 }
+                const marketValue = state.quantity * price;
                 assetsWithPrice.push({
                     assetId: assetId,
                     quantity: state.quantity,
                     unitPrice: price,
-                    marketValue: state.quantity * price,
+                    marketValue: marketValue,
                     totalCost: state.cost
                 });
+                totalValue += marketValue;
+                totalInvested += state.cost;
             }
 
             return {
                 id: s.id,
                 date: s.date,
-                totalValue: s.total_value,
-                totalInvested: s.total_invested,
+                totalValue,
+                totalInvested,
                 assets: assetsWithPrice
             };
         });
+
+        lruCache.set(cacheKey, result);
         return result;
     },
 
     getDetails: async (id) => {
-        const headerRows = await getQuery("SELECT id, date, total_value as totalValue, total_invested as totalInvested, note FROM snapshots WHERE id = ?", [id]);
+        const headerRows = await getQuery("SELECT id, date, note FROM snapshots WHERE id = ?", [id]);
         if (headerRows.length === 0) throw { statusCode: 404, message: "Snapshot not found" };
         const snapshot = headerRows[0];
         const snapshotDate = snapshot.date;
+
+        // Get totals from cache
+        const totals = await SnapshotService.calculateTotals(snapshotDate);
+        snapshot.totalValue = totals.totalValue;
+        snapshot.totalInvested = totals.totalInvested;
 
         const holdingsSql = `
             SELECT 
@@ -211,9 +260,6 @@ export const SnapshotService = {
                 const cChange = parseFloat(asset.addedPrincipal) || 0;
                 const txNote = asset.note || '';
                 
-                // Save if there is a change OR if there is a note (sometimes we just want to note why we held)
-                // But strictly speaking, snapshots track position via accumulating transactions. 
-                // A zero-value transaction with a note is valid for logging purposes.
                 if (Math.abs(qChange) > 0 || Math.abs(cChange) > 0 || txNote.length > 0) {
                      await runQuery(`
                         INSERT INTO transactions (id, asset_id, snapshot_id, date, type, quantity_change, cost_change, note, created_at)
@@ -222,68 +268,25 @@ export const SnapshotService = {
                 }
             }
 
-            // Recalculate Totals (The "Cache" part)
-            const holdingsSql = `
-                SELECT t.asset_id, SUM(t.quantity_change) as quantity, SUM(t.cost_change) as totalCost
-                FROM transactions t WHERE t.date <= ? GROUP BY t.asset_id
-            `;
-            const allHoldings = await getQuery(holdingsSql, [date]);
-            
-            let calcTotalValue = 0;
-            let calcTotalInvested = 0;
-
-            for (const h of allHoldings) {
-                const priceRow = await getQuery(`SELECT price FROM market_prices WHERE asset_id=? AND date<=? ORDER BY date DESC LIMIT 1`, [h.asset_id, date]);
-                const price = priceRow.length > 0 ? priceRow[0].price : (assets.find(a => a.assetId === h.asset_id)?.unitPrice || 0);
-                calcTotalValue += (h.quantity * price);
-                calcTotalInvested += h.totalCost;
-            }
-
             if (snapRows.length > 0) {
-                await runQuery("UPDATE snapshots SET total_value=?, total_invested=?, note=?, updated_at=? WHERE id=?", 
-                    [calcTotalValue, calcTotalInvested, note, now, snapshotId]);
+                await runQuery("UPDATE snapshots SET note=?, updated_at=? WHERE id=?", 
+                    [note, now, snapshotId]);
             } else {
-                await runQuery("INSERT INTO snapshots (id, date, total_value, total_invested, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    [snapshotId, date, calcTotalValue, calcTotalInvested, note, now, now]);
+                await runQuery("INSERT INTO snapshots (id, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                    [snapshotId, date, note, now, now]);
             }
+
+            // Clear cache for this date
+            lruCache.delete(`totals:${date}`);
+            lruCache.delete('historyGraph');
 
             return { success: true, id: snapshotId };
         });
     },
 
-    // New: Admin function to completely rebuild the 'snapshots' cache fields from raw transaction logs
-    // Call this if data feels inconsistent.
+    // Clear all calculated caches (e.g., after data import)
     recalculateCache: async () => {
-        const snapshots = await getQuery("SELECT id, date FROM snapshots");
-        let updatedCount = 0;
-
-        await withTransaction(async () => {
-            for (const s of snapshots) {
-                const date = s.date;
-                // 1. Sum holdings
-                const holdingsSql = `
-                    SELECT t.asset_id, SUM(t.quantity_change) as quantity, SUM(t.cost_change) as totalCost
-                    FROM transactions t WHERE t.date <= ? GROUP BY t.asset_id
-                `;
-                const holdings = await getQuery(holdingsSql, [date]);
-                
-                let val = 0; 
-                let inv = 0;
-                
-                // 2. Calculate Value
-                for (const h of holdings) {
-                    if (Math.abs(h.quantity) < 0.000001) continue;
-                    const priceRow = await getQuery(`SELECT price FROM market_prices WHERE asset_id=? AND date<=? ORDER BY date DESC LIMIT 1`, [h.asset_id, date]);
-                    const price = priceRow.length > 0 ? priceRow[0].price : 0;
-                    val += (h.quantity * price);
-                    inv += h.totalCost;
-                }
-                
-                // 3. Update Cache
-                await runQuery("UPDATE snapshots SET total_value=?, total_invested=? WHERE id=?", [val, inv, s.id]);
-                updatedCount++;
-            }
-        });
-        return { success: true, count: updatedCount };
+        lruCache.clear();
+        return { success: true, count: 0, message: "Cache cleared" };
     }
 };

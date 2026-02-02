@@ -71,7 +71,7 @@ export const SnapshotList: React.FC<SnapshotListProps> = ({
                                         </div>
                                         <div>
                                             <div className="text-sm text-slate-500">总资产</div>
-                                            <div className="font-bold text-slate-800 text-lg">¥{s.totalValue.toLocaleString()}</div>
+                                            <div className="font-bold text-slate-800 text-lg">¥{(s.totalValue ?? 0).toLocaleString()}</div>
                                         </div>
                                     </div>
 

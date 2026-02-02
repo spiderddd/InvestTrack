@@ -14,6 +14,7 @@ import assetsRouter from './routes/assets.js';
 import strategiesRouter from './routes/strategies.js';
 import snapshotsRouter from './routes/snapshots.js';
 import dashboardRouter from './routes/dashboard.js';
+import exportRouter from './routes/export.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +33,7 @@ app.use('/api/assets', assetsRouter);
 app.use('/api/strategies', strategiesRouter);
 app.use('/api/snapshots', snapshotsRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/export', exportRouter);
 
 // --- Static Files ---
 // Since this file is in /server/index.js, dist is in ../dist relative to here
