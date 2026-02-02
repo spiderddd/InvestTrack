@@ -3,8 +3,47 @@ import { v4 as uuidv4 } from 'uuid';
 import { runQuery, getQuery } from '../db.js';
 
 export const AssetService = {
-    getAll: async () => {
-        const sql = "SELECT id, type, name, ticker, note, created_at as createdAt FROM assets ORDER BY created_at DESC";
+    /**
+     * Get all assets
+     * @param {Object} options - Query options
+     * @param {string} options.fields - Comma-separated list of fields to return (e.g., "id,name,type,ticker")
+     * @param {string} options.format - Output format: 'simple' (no createdAt) or 'full' (default)
+     * @returns {Promise<Array>} List of assets
+     */
+    getAll: async (options = {}) => {
+        const { fields, format } = options;
+        
+        let sql;
+        let orderBy = 'ORDER BY created_at DESC';
+        
+        if (fields) {
+            // Only return specified fields
+            const allowedFields = fields.split(',').map(f => f.trim()).filter(f => 
+                ['id', 'name', 'type', 'ticker', 'note', 'created_at', 'createdAt'].includes(f)
+            );
+            
+            // Map createdAt to created_at for SQL
+            const sqlFields = allowedFields.map(f => f === 'createdAt' ? 'created_at as createdAt' : f);
+            
+            if (sqlFields.length === 0) {
+                // Fallback to default if no valid fields
+                sql = "SELECT id, type, name, ticker, note, created_at as createdAt FROM assets ORDER BY name";
+            } else {
+                // Check if we need to map createdAt back
+                const selectFields = fields.split(',').map(f => f.trim()).map(f => {
+                    if (f === 'createdAt') return 'created_at as createdAt';
+                    return f;
+                }).join(', ');
+                sql = `SELECT ${selectFields} FROM assets ORDER BY name`;
+            }
+        } else if (format === 'simple') {
+            // Simple format: exclude created_at
+            sql = "SELECT id, type, name, ticker, note FROM assets ORDER BY name";
+        } else {
+            // Full format (default)
+            sql = "SELECT id, type, name, ticker, note, created_at as createdAt FROM assets ORDER BY created_at DESC";
+        }
+        
         return await getQuery(sql);
     },
 

@@ -1,54 +1,123 @@
+/**
+ * @fileoverview Asset Routes
+ * 
+ * API Endpoints for managing investment assets.
+ * 
+ * Routes:
+ * - GET    /api/assets              - List all assets
+ * - POST   /api/assets              - Create new asset
+ * - PUT    /api/assets/:id          - Update asset
+ * - DELETE /api/assets/:id          - Delete asset
+ * - POST   /api/assets/:id/price    - Update asset price
+ * - GET    /api/assets/:id/history  - Get asset price history
+ */
 
 import express from 'express';
 import { AssetService } from '../services/assetService.js';
-import { sendSuccess, sendError } from '../utils/responseHelper.js';
+import { sendSuccess, sendCreated, sendError } from '../utils/responseHelper.js';
+import { validateBody, validateParams } from '../validations/middleware.js';
+import { AssetSchema, AssetUpdateSchema, PriceUpdateSchema } from '../validations/schemas.js';
+import { z } from 'zod';
 
 const router = express.Router();
 
+const IdParamSchema = z.object({ id: z.string().min(1) });
+
+/**
+ * @route   GET /api/assets
+ * @desc    Get all assets
+ * @access  Public
+ * @query   {string} [fields] - Comma-separated list of fields to include
+ * @query   {string} [format] - Response format (e.g., 'json', 'csv')
+ */
 router.get('/', async (req, res) => {
     try {
-        const data = await AssetService.getAll();
-        sendSuccess(res, data);
-    } catch (e) { sendError(res, e, "Get Assets"); }
+        const { fields, format } = req.query;
+        const data = await AssetService.getAll({ fields, format });
+        sendSuccess(res, data, 'Assets retrieved successfully');
+    } catch (e) { 
+        sendError(res, e, 'Get Assets'); 
+    }
 });
 
-router.post('/', async (req, res) => {
+/**
+ * @route   POST /api/assets
+ * @desc    Create new asset
+ * @access  Public
+ * @body    {Asset} Asset data
+ */
+router.post('/', validateBody(AssetSchema), async (req, res) => {
     try {
         const data = await AssetService.create(req.body);
-        sendSuccess(res, data);
-    } catch (e) { sendError(res, e, "Create Asset"); }
+        sendCreated(res, data, 'Asset created successfully');
+    } catch (e) { 
+        sendError(res, e, 'Create Asset'); 
+    }
 });
 
-router.put('/:id', async (req, res) => {
+/**
+ * @route   PUT /api/assets/:id
+ * @desc    Update existing asset
+ * @access  Public
+ * @params  {string} id - Asset ID
+ * @body    {Partial<Asset>} Updated asset data
+ */
+router.put('/:id', validateParams(IdParamSchema), validateBody(AssetUpdateSchema), async (req, res) => {
     try {
         const data = await AssetService.update(req.params.id, req.body);
-        sendSuccess(res, data);
-    } catch (e) { sendError(res, e, "Update Asset"); }
+        sendSuccess(res, data, 'Asset updated successfully');
+    } catch (e) { 
+        sendError(res, e, 'Update Asset'); 
+    }
 });
 
-router.delete('/:id', async (req, res) => {
+/**
+ * @route   DELETE /api/assets/:id
+ * @desc    Delete asset
+ * @access  Public
+ * @params  {string} id - Asset ID
+ */
+router.delete('/:id', validateParams(IdParamSchema), async (req, res) => {
     try {
         const data = await AssetService.delete(req.params.id);
-        sendSuccess(res, data);
-    } catch (e) { sendError(res, e, "Delete Asset"); }
+        sendSuccess(res, data, 'Asset deleted successfully');
+    } catch (e) { 
+        sendError(res, e, 'Delete Asset'); 
+    }
 });
 
-// New Endpoint: Manually update price (or via Crawler)
-router.post('/:id/price', async (req, res) => {
+/**
+ * @route   POST /api/assets/:id/price
+ * @desc    Update asset price for specific date
+ * @access  Public
+ * @params  {string} id - Asset ID
+ * @body    {price: number, date?: string} Price data
+ */
+router.post('/:id/price', validateParams(IdParamSchema), validateBody(PriceUpdateSchema), async (req, res) => {
     try {
         const { price, date } = req.body;
         // Default to today if no date
         const targetDate = date || new Date().toISOString().slice(0, 10);
         const data = await AssetService.updatePrice(req.params.id, price, targetDate);
-        sendSuccess(res, data);
-    } catch (e) { sendError(res, e, "Update Price"); }
+        sendSuccess(res, data, 'Price updated successfully');
+    } catch (e) { 
+        sendError(res, e, 'Update Price'); 
+    }
 });
 
-router.get('/:id/history', async (req, res) => {
+/**
+ * @route   GET /api/assets/:id/history
+ * @desc    Get asset price history
+ * @access  Public
+ * @params  {string} id - Asset ID
+ */
+router.get('/:id/history', validateParams(IdParamSchema), async (req, res) => {
     try {
         const data = await AssetService.getHistory(req.params.id);
-        sendSuccess(res, data);
-    } catch (e) { sendError(res, e, "Asset History"); }
+        sendSuccess(res, data, 'Asset history retrieved successfully');
+    } catch (e) { 
+        sendError(res, e, 'Asset History'); 
+    }
 });
 
 export default router;

@@ -1,0 +1,258 @@
+# InvestTrack - AI Development Guide
+
+## 项目结构速览
+
+```
+InvestTrack/
+├── client/src/          ← React 前端代码 (React 18 + TypeScript)
+│   ├── components/      # UI 组件
+│   ├── hooks/          # 自定义 Hooks
+│   ├── services/       # API 调用
+│   └── ...
+├── server/             ← Node.js 后端 (Express + SQLite)
+│   ├── routes/         # API 路由
+│   ├── services/       # 业务逻辑
+│   └── index.js        # 后端入口
+└── shared/             ← 前后端共享
+    └── types.ts        # TypeScript 类型定义（唯一数据源）
+```
+
+## AI 编写代码规则
+
+### 1. 类型定义（重要！）
+- **所有类型必须从 `@shared/types` 导入**
+- **禁止在组件内部重复定义类型**
+
+✅ 正确：
+```typescript
+import { Asset, StrategyVersion } from '@shared/types';
+
+interface Props {
+  asset: Asset;
+}
+```
+
+❌ 错误：
+```typescript
+// 不要这样做！
+interface Asset {
+  id: string;
+  name: string;
+}
+```
+
+### 2. 前端代码（client/src/）
+- 所有组件使用函数组件 + TypeScript
+- Props 必须定义 interface
+- 回调函数参数必须加类型注解（避免隐式 any）
+- 使用路径别名 `@shared` 而不是相对路径 `../../shared`
+
+### 3. 后端代码（server/）
+- API 路由在 server/routes/ 目录
+- 业务逻辑在 server/services/ 目录
+- 返回数据必须符合 shared/types.ts 中的类型定义
+
+### 4. 类型安全的回调函数
+当使用 map/filter/find/reduce 时，**必须**添加类型注解：
+
+```typescript
+// ✅ 正确
+assets.filter((a: Asset) => a.id === targetId)
+
+// ❌ 错误 - 会产生隐式 any 错误
+assets.filter(a => a.id === targetId)
+```
+
+### 5. 常用类型清单
+- `Asset` - 资产定义
+- `StrategyVersion` - 策略版本
+- `StrategyLayer` - 策略层级
+- `StrategyTarget` - 资产配置目标
+- `SnapshotItem` - 月度快照
+- `AssetRecord` - 资产持仓记录
+- `AssetHistoryRecord` - 资产历史记录（带 date 字段）
+
+## 构建与运行
+
+```bash
+# 开发
+npm run dev          # 启动前端
+npm start            # 启动后端（端口3001）
+
+# 构建
+npm run build        # TypeScript检查 + Vite构建
+
+# 数据维护
+node scripts/seed_data.js    # 生成测试数据
+node scripts/import_data.js  # 导入数据
+```
+
+## 常见陷阱
+
+1. **不要把 Asset 和 AssetRecord 混淆**
+   - Asset：资产定义（股票、基金的基本信息）
+   - AssetRecord：持仓记录（某个月底的实际持仓）
+
+2. **shared/types.ts 是唯一类型源**
+   - 修改类型必须先改这里
+   - 前后端自动同步
+
+3. **日期格式**
+   - 策略日期：YYYY-MM-DD
+   - 快照日期：YYYY-MM
+
+## 添加新功能的步骤
+
+1. **如果需要新类型**：
+   - 先在 `shared/types.ts` 定义接口
+   - 导出类型
+
+2. **如果需要新 API**：
+   - 后端：在 `server/routes/` 添加路由
+   - 后端：在 `server/services/` 添加业务逻辑
+   - 前端：在 `client/src/services/storageService.ts` 添加 API 调用
+
+3. **如果需要新组件**：
+   - 在 `client/src/components/` 创建 .tsx 文件
+   - Props 类型从 `@shared/types` 导入或组合
+   - 复杂逻辑抽离到 `client/src/hooks/`
+
+## 代码风格
+
+- 使用单引号
+- 缩进：2空格
+- 分号：可选（保持与现有代码一致）
+- 组件名：PascalCase
+- 函数名：camelCase
+- 类型名：PascalCase
+
+## 代码质量规范 (Phase 2)
+
+### 1. 输入验证 (Zod)
+所有 API 端点必须使用 Zod 验证输入：
+
+```javascript
+// 后端路由 - 必须添加验证
+router.post('/', validateBody(AssetSchema), async (req, res) => {
+  // req.body 已被验证和类型化
+});
+```
+
+**验证位置**：
+- `POST` / `PUT` 请求：使用 `validateBody(Schema)`
+- URL 参数：使用 `validateParams(Schema)`
+- Query 参数：使用 `validateQuery(Schema)`
+
+**预定义 Schemas**（在 `server/validations/schemas.js`）：
+- `AssetSchema` - 资产验证
+- `AssetUpdateSchema` - 资产更新（可选字段）
+- `StrategyVersionSchema` - 策略验证
+- `StrategyVersionCreateSchema` - 创建策略（无 ID）
+- `SnapshotSchema` - 快照验证
+- `PriceUpdateSchema` - 价格更新
+- `PaginationSchema` - 分页参数
+- `DashboardQuerySchema` - 仪表盘查询参数
+
+### 2. 错误处理规范
+统一错误响应格式：
+
+```json
+{
+  "success": false,
+  "error": "错误消息",
+  "context": "操作上下文",
+  "details": [ /* 验证错误详情 */ ]
+}
+```
+
+**使用 Response Helpers**：
+- `sendSuccess(res, data, message?)` - 200 成功
+- `sendCreated(res, data, message?)` - 201 创建成功
+- `sendNoContent(res)` - 204 无内容
+- `sendError(res, error, context, statusCode?)` - 错误响应
+
+**HTTP 状态码**：
+- 200 - 成功
+- 201 - 创建成功
+- 400 - 请求参数错误
+- 404 - 资源不存在
+- 409 - 冲突（如唯一约束违反）
+- 500 - 服务器内部错误
+
+### 3. API 文档注释
+每个路由必须添加 JSDoc 注释：
+
+```javascript
+/**
+ * @route   POST /api/assets
+ * @desc    Create new asset
+ * @access  Public
+ * @body    {Asset} Asset data
+ */
+```
+
+**必须包含**：
+- `@route` - HTTP 方法和路径
+- `@desc` - 功能描述
+- `@access` - 访问权限
+- `@body` / `@params` / `@query` - 参数说明
+- `@returns` - 返回值说明（复杂接口）
+
+### 4. 前端错误边界
+- 应用根组件包裹 `ErrorBoundary`
+- 组件级错误边界按需添加
+- 错误边界显示友好的错误页面（非空白屏幕）
+
+### 5. 新增文件规范
+**创建新后端 API**：
+1. 在 `server/validations/schemas.js` 添加验证 schema
+2. 在 `server/routes/` 创建路由文件
+3. 使用 JSDoc 注释所有路由
+4. 应用适当的验证中间件
+5. 更新 `docs/` 目录下的相关文档
+
+**创建新前端组件**：
+1. 复杂组件包裹 `ErrorBoundary`
+2. Props 必须定义 interface
+3. 错误状态使用 try-catch 处理
+
+**资产价格同步相关**：
+- 价格更新 API: `POST /api/assets/:id/price`
+- 获取资产列表: `GET /api/assets?format=simple`
+- Python 脚本位置: `scripts/sync_prices.py`
+- 文档位置: `docs/API-Price-Sync.md`
+
+### 6. 资产价格同步指南
+
+**手动更新单个资产价格：**
+```bash
+curl -X POST http://localhost:3001/api/assets/{asset_id}/price \
+  -H "Content-Type: application/json" \
+  -d '{"price": 158.75, "date": "2024-02-01"}'
+```
+
+**使用 Python 脚本自动同步：**
+```bash
+# 安装依赖
+pip install requests akshare
+
+# 运行同步脚本
+python scripts/sync_prices.py
+
+# 设置定时任务（每天下午3:30）
+crontab -e
+# 添加: 30 15 * * * /usr/bin/python3 /path/to/sync_prices.py
+```
+
+**API 查询参数：**
+- `GET /api/assets?format=simple` - 返回简化格式（不含 createdAt）
+- `GET /api/assets?fields=id,name,type,ticker` - 只返回指定字段
+- `GET /api/assets` - 完整格式（默认）
+
+## 调试技巧
+
+1. 后端日志：`console.log` 会直接输出到终端
+2. 前端日志：浏览器开发者工具 Console
+3. 数据库：直接查看 `data/invest_track_v2.db`
+4. API 测试：`curl http://localhost:3001/api/assets`
+5. 验证错误：检查响应中的 `details` 字段获取具体错误信息
