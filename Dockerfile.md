@@ -1,4 +1,3 @@
-
 # ==========================================
 # 🏗️ Stage 1: Builder (Build Frontend)
 # ==========================================
@@ -6,13 +5,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # 1. Install Dependencies
-# We need python/make/g++ because sqlite3 sometimes needs to compile from source
 RUN apk add --no-cache python3 make g++
 COPY package*.json ./
-# Install ALL dependencies (including devDependencies for Vite build)
 RUN npm ci
 
 # 2. Build Frontend
+# Copy everything (src, scripts, server, public files)
 COPY . .
 RUN npm run build
 
@@ -31,17 +29,16 @@ RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 RUN npm ci --only=production
 
-# 3. Copy Backend Source Code
-COPY server.js ./
+# 3. Copy Backend Source Code (Now in server/)
 COPY server ./server
 
-# 4. Copy Built Frontend Assets from Builder Stage
+# 4. Copy Built Frontend Assets
 COPY --from=builder /app/dist ./dist
 
-# 5. Setup Data Directory for SQLite
+# 5. Setup Data Directory
 RUN mkdir -p data
 VOLUME ["/app/data"]
 
-# 6. Start Server
+# 6. Start Server (Updated entry point)
 EXPOSE 3001
-CMD ["node", "server.js"]
+CMD ["node", "server/index.js"]

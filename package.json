@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
