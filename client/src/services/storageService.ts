@@ -1,7 +1,10 @@
 
 import { StrategyVersion, SnapshotItem, Asset } from '@shared/types';
 
-const API_BASE = '/api'; 
+const API_BASE = '/api';
+
+// 操作锁：防止并发修改策略导致数据覆盖
+let isSyncingStrategies = false;
 
 export const generateId = (): string => {
   // Use modern crypto API for consistent ID generation
@@ -21,7 +24,8 @@ export const StorageService = {
         
         const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to fetch overview');
-        return await res.json();
+        const data = await res.json();
+        return data.data || { metrics: { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 }, allocation: [], trend: [] };
     } catch (e) { 
         console.error(e); 
         return { metrics: { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 }, allocation: [], trend: [] }; 
@@ -32,7 +36,8 @@ export const StorageService = {
       try {
           const res = await fetch(`${API_BASE}/dashboard/metrics?viewMode=${viewMode}&timeRange=${timeRange}`);
           if (!res.ok) throw new Error('Failed to fetch metrics');
-          return await res.json();
+          const data = await res.json();
+          return data.data || { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 };
       } catch (e) { console.error(e); return { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 }; }
   },
 
@@ -42,7 +47,8 @@ export const StorageService = {
           if (layerId) url += `&layerId=${layerId}`;
           const res = await fetch(url);
           if (!res.ok) throw new Error('Failed to fetch allocation');
-          return await res.json();
+          const data = await res.json();
+          return data.data || [];
       } catch (e) { console.error(e); return []; }
   },
 
@@ -53,7 +59,8 @@ export const StorageService = {
           if (startDate) url += `&startDate=${startDate}`;
           const res = await fetch(url);
           if (!res.ok) throw new Error('Failed to fetch trend');
-          return await res.json();
+          const data = await res.json();
+          return data.data || [];
       } catch (e) { console.error(e); return []; }
   },
 
@@ -63,7 +70,8 @@ export const StorageService = {
           if (layerId) url += `&layerId=${layerId}`;
           const res = await fetch(url);
           if (!res.ok) throw new Error('Failed to fetch breakdown');
-          return await res.json();
+          const data = await res.json();
+          return data.data || [];
       } catch (e) { console.error(e); return []; }
   },
 
@@ -72,7 +80,8 @@ export const StorageService = {
     try {
       const res = await fetch(`${API_BASE}/assets`);
       if (!res.ok) throw new Error('Failed to fetch assets');
-      return await res.json();
+      const data = await res.json();
+      return data.data || [];
     } catch (e) { console.error(e); return []; }
   },
 
@@ -109,7 +118,8 @@ export const StorageService = {
     try {
         const res = await fetch(`${API_BASE}/assets/${assetId}/history`);
         if (!res.ok) throw new Error('Failed to fetch asset history');
-        return await res.json();
+        const data = await res.json();
+        return data.data || [];
     } catch (e) { console.error(e); return []; }
   },
 
@@ -118,38 +128,55 @@ export const StorageService = {
     try {
       const res = await fetch(`${API_BASE}/strategies`);
       if (!res.ok) throw new Error('Failed to fetch strategies');
-      return await res.json();
+      const data = await res.json();
+      return data.data || [];
     } catch (e) { console.error(e); return []; }
   },
 
   // Encapsulated Business Logic: Sync Strategies (Diffing)
+  // 修复：添加操作锁防止并发修改导致数据覆盖
   syncStrategies: async (currentList: StrategyVersion[], newVersions: StrategyVersion[]) => {
-      const oldIds = new Set(currentList.map(v => v.id));
-      const newIds = new Set(newVersions.map(v => v.id));
-
-      // 1. Handle Creates & Updates
-      for (const v of newVersions) {
-          const old = currentList.find(o => o.id === v.id);
-          if (!old) {
-              await fetch(`${API_BASE}/strategies`, {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify(v)
-              });
-          } else if (JSON.stringify(old) !== JSON.stringify(v)) {
-              await fetch(`${API_BASE}/strategies/${v.id}`, {
-                  method: 'PUT',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify(v)
-              });
-          }
+      // 检查是否已有同步操作在进行中
+      if (isSyncingStrategies) {
+          throw new Error('策略同步操作正在进行中，请等待完成后再试');
       }
 
-      // 2. Handle Deletes
-      for (const old of currentList) {
-          if (!newIds.has(old.id)) {
-              await fetch(`${API_BASE}/strategies/${old.id}`, { method: 'DELETE' });
+      try {
+          isSyncingStrategies = true;
+
+          const oldIds = new Set(currentList.map(v => v.id));
+          const newIds = new Set(newVersions.map(v => v.id));
+
+          // 1. Handle Creates & Updates
+          for (const v of newVersions) {
+              const old = currentList.find(o => o.id === v.id);
+              if (!old) {
+                  const res = await fetch(`${API_BASE}/strategies`, {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify(v)
+                  });
+                  if (!res.ok) throw new Error(`创建策略失败: ${v.name}`);
+              } else if (JSON.stringify(old) !== JSON.stringify(v)) {
+                  const res = await fetch(`${API_BASE}/strategies/${v.id}`, {
+                      method: 'PUT',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify(v)
+                  });
+                  if (!res.ok) throw new Error(`更新策略失败: ${v.name}`);
+              }
           }
+
+          // 2. Handle Deletes
+          for (const old of currentList) {
+              if (!newIds.has(old.id)) {
+                  const res = await fetch(`${API_BASE}/strategies/${old.id}`, { method: 'DELETE' });
+                  if (!res.ok) throw new Error(`删除策略失败: ${old.name}`);
+              }
+          }
+      } finally {
+          // 无论成功失败，都要释放锁
+          isSyncingStrategies = false;
       }
   },
 
@@ -160,7 +187,8 @@ export const StorageService = {
     try {
       const res = await fetch(`${API_BASE}/snapshots?page=${page}&limit=${limit}`);
       if (!res.ok) throw new Error('Failed to fetch snapshots');
-      return await res.json();
+      const data = await res.json();
+      return data.data || { items: [], total: 0 };
     } catch (e) { console.error(e); return { items: [], total: 0 }; }
   },
 
@@ -169,7 +197,8 @@ export const StorageService = {
     try {
       const res = await fetch(`${API_BASE}/snapshots/history`);
       if (!res.ok) throw new Error('Failed to fetch snapshots history');
-      return await res.json();
+      const data = await res.json();
+      return data.data || [];
     } catch (e) { console.error(e); return []; }
   },
 
@@ -178,7 +207,8 @@ export const StorageService = {
     try {
         const res = await fetch(`${API_BASE}/snapshots/dates`);
         if (!res.ok) throw new Error('Failed to fetch snapshot dates');
-        return await res.json();
+        const data = await res.json();
+        return data.data || [];
     } catch (e) { console.error(e); return []; }
   },
 
@@ -187,7 +217,8 @@ export const StorageService = {
       try {
           const res = await fetch(`${API_BASE}/snapshots/details-by-date?date=${date}`);
           if (!res.ok) throw new Error('Failed to fetch snapshot details by date');
-          return await res.json();
+          const data = await res.json();
+          return data.data || null;
       } catch (e) { console.error(e); return null; }
   },
 
@@ -196,7 +227,8 @@ export const StorageService = {
     try {
         const res = await fetch(`${API_BASE}/snapshots/${id}`);
         if (!res.ok) throw new Error('Failed to fetch snapshot details');
-        return await res.json();
+        const data = await res.json();
+        return data.data || null;
     } catch (e) { console.error(e); return null; }
   },
 

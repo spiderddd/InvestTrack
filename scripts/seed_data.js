@@ -7,6 +7,14 @@
 
 const API_BASE = 'http://localhost:3001/api';
 
+// 生成唯一 ID
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+};
+
 // 模拟数据配置
 const MOCK_ASSETS = [
     { name: '沪深300ETF', type: 'fund', ticker: '510300', note: 'A股核心宽基' },
@@ -43,12 +51,16 @@ const run = async () => {
 
     // 1. 创建资产
     console.log("\n📦 步骤 1: 创建资产...");
-    const assetMap = {}; // name -> id
+    const assetMap = {}; // name -> { id, type, name }
     
     for (const asset of MOCK_ASSETS) {
         const res = await post('/assets', asset);
-        assetMap[asset.name] = res.id;
-        console.log(`   ✅ 创建资产: ${asset.name}`);
+        assetMap[asset.name] = { 
+            id: res.data.id, 
+            type: asset.type, 
+            name: asset.name 
+        };
+        console.log(`   ✅ 创建资产: ${asset.name} (${res.data.id})`);
     }
 
     // 2. 创建策略
@@ -60,24 +72,26 @@ const run = async () => {
         status: 'active',
         layers: [
             {
+                id: generateId(),
                 name: '第一层：稳健底仓',
                 weight: 40,
                 description: '提供安全垫，随时可用的流动性',
                 items: [
-                    { assetId: assetMap['招商银行理财'], weight: 20, color: '#64748b', note: '长期理财' },
-                    { assetId: assetMap['备用金(余额宝)'], weight: 10, color: '#94a3b8', note: '随时取用' },
-                    { assetId: assetMap['实物黄金'], weight: 10, color: '#f59e0b', note: '抗通胀' }
+                    { id: generateId(), assetId: assetMap['招商银行理财'].id, targetName: '招商银行理财', weight: 20, color: '#64748b', note: '长期理财' },
+                    { id: generateId(), assetId: assetMap['备用金(余额宝)'].id, targetName: '备用金(余额宝)', weight: 10, color: '#94a3b8', note: '随时取用' },
+                    { id: generateId(), assetId: assetMap['实物黄金'].id, targetName: '实物黄金', weight: 10, color: '#f59e0b', note: '抗通胀' }
                 ]
             },
             {
+                id: generateId(),
                 name: '第二层：进取成长',
                 weight: 60,
                 description: '主要收益来源',
                 items: [
-                    { assetId: assetMap['沪深300ETF'], weight: 20, color: '#ef4444', note: '做多中国' },
-                    { assetId: assetMap['纳指100ETF'], weight: 20, color: '#3b82f6', note: 'AI 浪潮' },
-                    { assetId: assetMap['腾讯控股'], weight: 10, color: '#8b5cf6', note: '低估值反弹' },
-                    { assetId: assetMap['Bitcoin'], weight: 10, color: '#f97316', note: '非对称收益' }
+                    { id: generateId(), assetId: assetMap['沪深300ETF'].id, targetName: '沪深300ETF', weight: 20, color: '#ef4444', note: '做多中国' },
+                    { id: generateId(), assetId: assetMap['纳指100ETF'].id, targetName: '纳指100ETF', weight: 20, color: '#3b82f6', note: 'AI 浪潮' },
+                    { id: generateId(), assetId: assetMap['腾讯控股'].id, targetName: '腾讯控股', weight: 10, color: '#8b5cf6', note: '低估值反弹' },
+                    { id: generateId(), assetId: assetMap['Bitcoin'].id, targetName: 'Bitcoin', weight: 10, color: '#f97316', note: '非对称收益' }
                 ]
             }
         ]
@@ -90,13 +104,13 @@ const run = async () => {
 
     // 初始价格与持仓 (1月份建仓)
     let marketState = {
-        [assetMap['沪深300ETF']]: { price: 3.5, quantity: 10000 },
-        [assetMap['纳指100ETF']]: { price: 1.2, quantity: 20000 },
-        [assetMap['腾讯控股']]: { price: 280, quantity: 200 },
-        [assetMap['招商银行理财']]: { price: 1.0, quantity: 50000 },
-        [assetMap['实物黄金']]: { price: 480, quantity: 50 },
-        [assetMap['Bitcoin']]: { price: 450000, quantity: 0.1 },
-        [assetMap['备用金(余额宝)']]: { price: 1.0, quantity: 20000 }
+        [assetMap['沪深300ETF'].id]: { price: 3.5, quantity: 10000, totalCost: 35000 },
+        [assetMap['纳指100ETF'].id]: { price: 1.2, quantity: 20000, totalCost: 24000 },
+        [assetMap['腾讯控股'].id]: { price: 280, quantity: 200, totalCost: 56000 },
+        [assetMap['招商银行理财'].id]: { price: 1.0, quantity: 50000, totalCost: 50000 },
+        [assetMap['实物黄金'].id]: { price: 480, quantity: 50, totalCost: 24000 },
+        [assetMap['Bitcoin'].id]: { price: 450000, quantity: 0.1, totalCost: 45000 },
+        [assetMap['备用金(余额宝)'].id]: { price: 1.0, quantity: 20000, totalCost: 20000 }
     };
 
     const months = ['2024-01', '2024-02', '2024-03', '2024-04', '2024-05', '2024-06'];
@@ -105,6 +119,8 @@ const run = async () => {
         const month = months[i];
         const isInit = i === 0; // 是否是建仓月
         const snapshotAssets = [];
+        let totalValue = 0;
+        let totalInvested = 0;
         
         // 随机生成本月笔记
         const notes = [
@@ -116,8 +132,8 @@ const run = async () => {
             "半年总结：整体跑赢通胀，继续保持。"
         ];
 
-        for (const [name, id] of Object.entries(assetMap)) {
-            const state = marketState[id];
+        for (const [name, info] of Object.entries(assetMap)) {
+            const state = marketState[info.id];
             
             // 1. 模拟价格波动 (-5% 到 +8%)
             const isFixed = name.includes('理财') || name.includes('余额宝');
@@ -133,7 +149,7 @@ const run = async () => {
 
             if (isInit) {
                 addedQ = state.quantity;
-                addedC = state.quantity * state.price;
+                addedC = state.totalCost;
                 txNote = "初始建仓";
             } else {
                 const rand = Math.random();
@@ -143,6 +159,7 @@ const run = async () => {
                         addedQ = deposit; 
                         addedC = deposit;
                         state.quantity += deposit;
+                        state.totalCost += deposit;
                         txNote = Math.random() > 0.5 ? "定期存款" : "发工资存入";
                     } else {
                         const cost = 2000;
@@ -150,6 +167,7 @@ const run = async () => {
                         addedQ = q;
                         addedC = cost;
                         state.quantity += q;
+                        state.totalCost += cost;
                         txNote = Math.random() > 0.5 ? "看好后市加仓" : "定投扣款";
                     }
                 } else if (isFixed && rand < 0.2) {
@@ -160,11 +178,21 @@ const run = async () => {
                 }
             }
 
+            const marketValue = state.quantity * state.price;
+            totalValue += marketValue;
+            totalInvested += state.totalCost;
+
             snapshotAssets.push({
-                assetId: id,
+                id: generateId(),
+                assetId: info.id,
+                name: info.name,
+                category: info.type,
                 unitPrice: state.price,
-                addedQuantity: addedQ,
+                quantity: state.quantity,
+                marketValue: marketValue,
+                totalCost: state.totalCost,
                 addedPrincipal: addedC,
+                addedQuantity: addedQ,
                 note: txNote
             });
         }
@@ -172,11 +200,13 @@ const run = async () => {
         const payload = {
             date: month,
             note: `# ${month} 投资笔记\n\n${notes[i]}`,
-            assets: snapshotAssets
+            assets: snapshotAssets,
+            totalValue: totalValue,
+            totalInvested: totalInvested
         };
 
         await post('/snapshots', payload);
-        console.log(`   ✅ 生成账本: ${month}`);
+        console.log(`   ✅ 生成账本: ${month} (总值: ¥${Math.round(totalValue).toLocaleString()})`);
     }
 
     console.log("\n🎉 所有数据生成完毕！请刷新前端页面查看效果。");

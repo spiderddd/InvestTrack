@@ -15,8 +15,19 @@ export const CATEGORY_COLORS: Record<string, string> = {
 export const getStrategyForDate = (versions: StrategyVersion[], dateStr: string): StrategyVersion | null => {
     if (!versions || versions.length === 0) return null;
     const sorted = [...versions].sort((a, b) => b.startDate.localeCompare(a.startDate));
-    const targetDate = dateStr.length === 7 ? `${dateStr}-31` : dateStr;
-    return sorted.find(v => v.startDate <= targetDate) || sorted[sorted.length - 1]; 
+    
+    // 修复：正确处理YYYY-MM格式的月末日期
+    let targetDate: string;
+    if (dateStr.length === 7) {
+        // YYYY-MM格式，获取该月最后一天
+        const [year, month] = dateStr.split('-').map(Number);
+        const lastDay = new Date(year, month, 0).getDate();
+        targetDate = `${dateStr}-${lastDay.toString().padStart(2, '0')}`;
+    } else {
+        targetDate = dateStr;
+    }
+    
+    return sorted.find(v => v.startDate <= targetDate) || sorted[sorted.length - 1];
 };
 
 export const getAssetTargetMap = (strategy: StrategyVersion | null) => {

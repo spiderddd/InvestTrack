@@ -15,59 +15,107 @@ type View = 'dashboard' | 'strategy' | 'snapshots' | 'assets';
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [showGuide, setShowGuide] = useState(false);
-  
+  const [actionError, setActionError] = useState<string | null>(null);
+
   // Consume data from Context
-  const { 
-    assets, 
-    strategies, 
-    snapshots, 
-    isLoading, 
-    error, 
-    refreshAll, 
-    refreshAssets, 
-    refreshStrategies, 
-    refreshSnapshots 
+  const {
+    assets,
+    strategies,
+    snapshots,
+    isLoading,
+    error,
+    refreshAll,
+    refreshAssets,
+    refreshStrategies,
+    refreshSnapshots
   } = useData();
+
+  // 错误处理辅助函数
+  const handleError = (err: unknown, context: string) => {
+    const message = err instanceof Error ? err.message : '操作失败，请重试';
+    setActionError(`${context}: ${message}`);
+    // 3秒后自动清除错误
+    setTimeout(() => setActionError(null), 3000);
+  };
 
   // Wrappers to refresh specific data after updates
   const handleUpdateStrategies = async (newVersions: StrategyVersion[]) => {
-      // Logic moved to Service to keep UI Component clean
-      await StorageService.syncStrategies(strategies, newVersions);
-      // Only refresh strategies, assets and snapshots remain cached
-      await refreshStrategies();
+      try {
+          setActionError(null);
+          // Logic moved to Service to keep UI Component clean
+          await StorageService.syncStrategies(strategies, newVersions);
+          // Only refresh strategies, assets and snapshots remain cached
+          await refreshStrategies();
+      } catch (err) {
+          handleError(err, '保存策略失败');
+          throw err;
+      }
   };
 
   const handleUpdateSnapshots = async (_newSnapshots: SnapshotItem[]) => {
-     // This callback is usually triggered by bulk updates, currently we mostly use handleSaveSnapshot
-     await refreshSnapshots();
+     try {
+         setActionError(null);
+         // This callback is usually triggered by bulk updates, currently we mostly use handleSaveSnapshot
+         await refreshSnapshots();
+     } catch (err) {
+         handleError(err, '更新快照列表失败');
+     }
   };
-  
+
   const handleSaveSnapshot = async (s: SnapshotItem) => {
-    await StorageService.saveSnapshotSingle(s);
-    await refreshSnapshots();
+    try {
+        setActionError(null);
+        await StorageService.saveSnapshotSingle(s);
+        await refreshSnapshots();
+    } catch (err) {
+        handleError(err, '保存快照失败');
+        throw err;
+    }
   };
 
   const handleCreateAsset = async (a: Partial<Asset>) => {
-    await StorageService.createAsset(a);
-    await refreshAssets();
+    try {
+        setActionError(null);
+        await StorageService.createAsset(a);
+        await refreshAssets();
+    } catch (err) {
+        handleError(err, '创建资产失败');
+        throw err;
+    }
   };
 
   const handleEditAsset = async (id: string, a: Partial<Asset>) => {
-    const success = await StorageService.updateAsset(id, a);
-    if (success) {
-        await refreshAssets();
-        // Snapshots might contain asset names, so we refresh them too to ensure consistency
-        await refreshSnapshots();
+    try {
+        setActionError(null);
+        const success = await StorageService.updateAsset(id, a);
+        if (success) {
+            await refreshAssets();
+            // Snapshots might contain asset names, so we refresh them too to ensure consistency
+            await refreshSnapshots();
+        } else {
+            throw new Error('更新资产失败');
+        }
+        return success;
+    } catch (err) {
+        handleError(err, '更新资产失败');
+        throw err;
     }
-    return success;
   };
 
   const handleDeleteAsset = async (id: string) => {
-    const success = await StorageService.deleteAsset(id);
-    if (success) {
-        await refreshAssets();
+    try {
+        setActionError(null);
+        const success = await StorageService.deleteAsset(id);
+        if (success) {
+            await refreshAssets();
+        } else {
+            throw new Error('删除资产失败');
+        }
+        return success;
+    } catch (err) {
+        handleError(err, '删除资产失败');
+        throw err;
     }
-    return success;
   };
 
   const getNavLabel = (view: View) => {
@@ -99,8 +147,21 @@ const AppContent: React.FC = () => {
     );
   }
 
+  // 操作错误提示组件
+  const ActionErrorToast = () => {
+    if (!actionError) return null;
+    return (
+      <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg max-w-md">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{actionError}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <ActionErrorToast />
       {/* Header (Desktop) */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10 hidden md:block">
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">

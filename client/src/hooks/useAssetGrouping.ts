@@ -25,7 +25,7 @@ interface AssetPerformance {
   isHistorical: boolean;
 }
 
-export const useAssetGrouping = (assets: Asset[], _propsSnapshots: SnapshotItem[], strategies: StrategyVersion[]) => {
+export const useAssetGrouping = (assets: Asset[], propsSnapshots: SnapshotItem[], strategies: StrategyVersion[]) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showHeldOnly, setShowHeldOnly] = useState(false);
   const [groupBy, setGroupBy] = useState<'category' | 'layer'>('category');
@@ -42,10 +42,28 @@ export const useAssetGrouping = (assets: Asset[], _propsSnapshots: SnapshotItem[
 
   // 2. Fetch snapshot details when date changes (On-Demand Calculation)
   useEffect(() => {
-    StorageService.getSnapshotByDate(selectedDate).then(details => {
-        setViewSnapshot(details);
-    });
-  }, [selectedDate]);
+    const fetchSnapshot = async () => {
+      let targetDate = selectedDate;
+      
+      if (selectedDate === 'latest') {
+        // If 'latest' is selected, use the latest date from propsSnapshots
+        if (propsSnapshots.length > 0) {
+          // Find the snapshot with the latest date
+          const latestSnapshot = propsSnapshots.reduce((latest, current) => {
+            return new Date(current.date) > new Date(latest.date) ? current : latest;
+          });
+          targetDate = latestSnapshot.date;
+        } else {
+          setViewSnapshot(null);
+          return;
+        }
+      }
+      
+      const details = await StorageService.getSnapshotByDate(targetDate);
+      setViewSnapshot(details);
+    };
+    fetchSnapshot();
+  }, [selectedDate, propsSnapshots]);
 
   const activeStrategy = useMemo(() => {
       return strategies.find(s => s.status === 'active') || strategies[strategies.length - 1];

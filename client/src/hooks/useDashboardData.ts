@@ -60,17 +60,17 @@ export const useDashboardData = (strategies: StrategyVersion[], snapshots: Snaps
                 const { metrics, allocation, trend } = overview;
 
                 setEndMetrics({
-                    value: metrics.endValue,
-                    invested: metrics.endInvested,
-                    profit: metrics.profit,
-                    returnRate: metrics.returnRate,
-                    periodLabel: metrics.periodLabel
+                    value: metrics?.endValue ?? 0,
+                    invested: metrics?.endInvested ?? 0,
+                    profit: metrics?.profit ?? 0,
+                    returnRate: metrics?.returnRate ?? 0,
+                    periodLabel: metrics?.periodLabel ?? '...'
                 });
                 setStartMetrics({ value: 0, invested: 0 }); 
 
-                setAllocationData(allocation);
-                setHistoryData(trend);
-                setBreakdownData(breakdown);
+                setAllocationData(allocation ?? []);
+                setHistoryData(trend ?? []);
+                setBreakdownData(breakdown ?? []);
             }
         } catch (error) {
             console.error("Failed to load dashboard data", error);
