@@ -94,11 +94,11 @@ export const StrategyService = {
             const existingLayers = await getQuery("SELECT id FROM strategy_layers WHERE version_id = ?", [id]);
             const existingLayerIds = new Set(existingLayers.map(l => l.id));
             const incomingLayerIds = new Set();
-            
+
             if (layers && layers.length > 0) {
                 for (let lIdx = 0; lIdx < layers.length; lIdx++) {
                     const layer = layers[lIdx];
-                    
+
                     let layerId = layer.id;
                     if (layerId && existingLayerIds.has(layerId)) {
                         // Update existing layer
@@ -107,7 +107,7 @@ export const StrategyService = {
                             [layer.name, layer.weight, layer.description || '', lIdx, layerId]
                         );
                         incomingLayerIds.add(layerId);
-                        
+
                         // Clear targets for this layer to re-insert (Simpler than full diff for leaf nodes)
                         await runQuery("DELETE FROM strategy_targets WHERE layer_id = ?", [layerId]);
                     } else {
@@ -140,9 +140,93 @@ export const StrategyService = {
             // Convert Set to Array for iteration
             const layersToDelete = [...existingLayerIds].filter(x => !incomingLayerIds.has(x));
             if (layersToDelete.length > 0) {
-                // Targets cascade delete via DB constraints, but let's be safe/explicit if needed. 
+                // Targets cascade delete via DB constraints, but let's be safe/explicit if needed.
                 const placeholders = layersToDelete.map(() => '?').join(',');
                 await runQuery(`DELETE FROM strategy_layers WHERE id IN (${placeholders})`, layersToDelete);
+            }
+
+            return { success: true, id };
+        });
+    },
+
+    updateVersion: async (id, data) => {
+        const { name, description, startDate, status } = data;
+
+        await runQuery(
+            "UPDATE strategy_versions SET name=?, description=?, start_date=?, status=? WHERE id=?",
+            [name, description, startDate, status, id]
+        );
+
+        return { success: true, id };
+    },
+
+    updateLayers: async (id, layers) => {
+        return await withTransaction(async () => {
+            const existingLayers = await getQuery("SELECT id FROM strategy_layers WHERE version_id = ?", [id]);
+            const existingLayerIds = new Set(existingLayers.map(l => l.id));
+            const incomingLayerIds = new Set();
+
+            if (layers && layers.length > 0) {
+                for (let lIdx = 0; lIdx < layers.length; lIdx++) {
+                    const layer = layers[lIdx];
+
+                    let layerId = layer.id;
+                    if (layerId && existingLayerIds.has(layerId)) {
+                        // Update existing layer
+                        await runQuery(
+                            "UPDATE strategy_layers SET name=?, weight=?, description=?, sort_order=? WHERE id=?",
+                            [layer.name, layer.weight, layer.description || '', lIdx, layerId]
+                        );
+                        incomingLayerIds.add(layerId);
+                    } else {
+                        // Insert new layer
+                        layerId = (layer.id && layer.id.length > 10) ? layer.id : uuidv4();
+                        await runQuery(
+                            "INSERT INTO strategy_layers (id, version_id, name, weight, description, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+                            [layerId, id, layer.name, layer.weight, layer.description || '', lIdx]
+                        );
+                        incomingLayerIds.add(layerId);
+                    }
+                }
+            }
+
+            // Delete removed layers
+            const layersToDelete = [...existingLayerIds].filter(x => !incomingLayerIds.has(x));
+            if (layersToDelete.length > 0) {
+                const placeholders = layersToDelete.map(() => '?').join(',');
+                await runQuery(`DELETE FROM strategy_layers WHERE id IN (${placeholders})`, layersToDelete);
+            }
+
+            return { success: true, id };
+        });
+    },
+
+    updateTargets: async (id, targetsByLayer) => {
+        return await withTransaction(async () => {
+            // Get all layers for this version to validate
+            const layers = await getQuery("SELECT id FROM strategy_layers WHERE version_id = ?", [id]);
+            const validLayerIds = new Set(layers.map(l => l.id));
+
+            for (const { layerId, items } of targetsByLayer) {
+                if (!validLayerIds.has(layerId)) {
+                    throw new Error(`Invalid layer ID: ${layerId}`);
+                }
+
+                // Clear existing targets for this layer
+                await runQuery("DELETE FROM strategy_targets WHERE layer_id = ?", [layerId]);
+
+                // Insert new targets
+                if (items && items.length > 0) {
+                    for (let tIdx = 0; tIdx < items.length; tIdx++) {
+                        const item = items[tIdx];
+                        const itemId = (item.id && item.id.length > 10) ? item.id : uuidv4();
+
+                        await runQuery(
+                            "INSERT INTO strategy_targets (id, layer_id, asset_id, weight, color, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            [itemId, layerId, item.assetId, item.weight, item.color, item.note || '', tIdx]
+                        );
+                    }
+                }
             }
 
             return { success: true, id };

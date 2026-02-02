@@ -88,6 +88,37 @@ export const AssetService = {
         return { success: true };
     },
 
+    // New: Get prices for multiple assets
+    getPrices: async (assetIds) => {
+        if (!assetIds || assetIds.length === 0) return {};
+
+        const placeholders = assetIds.map(() => '?').join(',');
+        // Get latest price for each asset
+        const sql = `
+            SELECT asset_id, price, date
+            FROM market_prices
+            WHERE asset_id IN (${placeholders})
+            AND date <= ?
+        `;
+
+        const currentDate = new Date().toISOString().slice(0, 10);
+        const prices = await getQuery(sql, [...assetIds, currentDate]);
+
+        // Convert to map: assetId -> { price, date }
+        const priceMap = {};
+        for (const p of prices) {
+            // Keep the latest price for each asset
+            // Use both asset_id (DB) and assetId (camelCase for frontend compatibility)
+            const key = p.assetId || p.asset_id;
+            if (!key) continue;
+            if (!priceMap[key] || p.date > priceMap[key].date) {
+                priceMap[key] = { price: p.price, date: p.date };
+            }
+        }
+
+        return priceMap;
+    },
+
     getHistory: async (assetId) => {
         // OPTIMIZED: Fetch all raw data first
         

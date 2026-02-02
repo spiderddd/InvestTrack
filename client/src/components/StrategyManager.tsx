@@ -64,13 +64,51 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
   }, [currentVersion]);
 
 
-  // --- Core: Save Logic ---
-  const updateCurrentVersion = (newLayers: StrategyLayer[]) => {
+  // --- Core: Save Logic (Optimized for Layered API) ---
+  const updateCurrentVersion = async (newLayers: StrategyLayer[]) => {
       if (!currentVersion) return;
-      const updatedVersions = versions.map(v => 
-        v.id === currentVersion.id ? { ...v, layers: newLayers } : v
-      );
-      onUpdate(updatedVersions);
+
+      // Detect what changed: layers vs targets
+      const oldLayers = currentVersion.layers;
+      const layersChanged = JSON.stringify(oldLayers.map(l => ({ id: l.id, name: l.name, weight: l.weight, description: l.description }))) !==
+                           JSON.stringify(newLayers.map(l => ({ id: l.id, name: l.name, weight: l.weight, description: l.description })));
+
+      // Check if items (targets) changed for any layer
+      let targetsChanged = false;
+      const targetsByLayer: { layerId: string; items: StrategyTarget[] }[] = [];
+
+      for (const newLayer of newLayers) {
+          const oldLayer = oldLayers.find(l => l.id === newLayer.id);
+          if (!oldLayer || JSON.stringify(oldLayer.items) !== JSON.stringify(newLayer.items)) {
+              targetsChanged = true;
+          }
+          targetsByLayer.push({ layerId: newLayer.id, items: newLayer.items });
+      }
+
+      try {
+          let apiChanged = false;
+
+          if (layersChanged) {
+              await StorageService.updateStrategyLayers(currentVersion.id, newLayers);
+              apiChanged = true;
+          }
+
+          if (targetsChanged) {
+              await StorageService.updateStrategyTargets(currentVersion.id, targetsByLayer);
+              apiChanged = true;
+          }
+
+          if (apiChanged) {
+              // Update local state
+              const updatedVersions = versions.map(v =>
+                v.id === currentVersion.id ? { ...v, layers: newLayers } : v
+              );
+              onUpdate(updatedVersions);
+          }
+      } catch (error) {
+          console.error('Failed to update strategy:', error);
+          alert('保存失败，请重试');
+      }
   };
 
   // --- Handlers: Layer Modal ---

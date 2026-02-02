@@ -53,12 +53,23 @@ export const StrategyLayerSchema = z.object({
 });
 
 /**
+ * Strategy Layer Schema for Update (Level 2) - items optional
+ */
+export const StrategyLayerUpdateSchema = z.object({
+  id: IdSchema.optional(),
+  name: z.string().min(1, 'Layer name is required').max(50),
+  weight: z.number().min(0).max(100, 'Weight must be between 0 and 100'),
+  description: z.string().max(500).optional(),
+  items: z.array(StrategyTargetSchema).optional()
+});
+
+/**
  * Strategy Version Schema (Level 1)
  */
 export const StrategyVersionSchema = z.object({
   id: IdSchema,
   name: z.string().min(1, 'Strategy name is required').max(100),
-  description: z.string().max(2000),
+  description: z.string().max(100000),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
   status: StrategyStatusSchema,
   layers: z.array(StrategyLayerSchema)

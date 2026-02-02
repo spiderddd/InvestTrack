@@ -20,7 +20,7 @@ export interface AssetRowInput {
 export const useSnapshotForm = (
     snapshots: SnapshotItem[],
     assets: Asset[],
-    activeStrategy: StrategyVersion | undefined
+    activeStrategy: StrategyVersion | undefined | null
 ) => {
     const [date, setDate] = useState(() => new Date().toISOString().slice(0, 7));
     const [note, setNote] = useState('');
@@ -87,16 +87,43 @@ export const useSnapshotForm = (
                 // New Snapshot
                 if (activeStrategy && activeStrategy.layers) {
                     const allTargets = activeStrategy.layers.flatMap((l: StrategyLayer) => l.items);
+
+                    // Fetch current prices for all strategy assets
+                    const strategyAssetIds = allTargets
+                        .map((item: StrategyTarget) => item.assetId)
+                        .filter((id: string) => id);
+
+                    let priceMap: Record<string, { price: number; date: string }> = {};
+                    if (strategyAssetIds.length > 0) {
+                        try {
+                            const priceRes = await fetch('/api/assets/prices', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ assetIds: strategyAssetIds })
+                            });
+                            if (priceRes.ok) {
+                                const parsed = await priceRes.json();
+                                priceMap = parsed.data || {};
+                            }
+                        } catch (err) {
+                            console.warn("Failed to fetch asset prices, using defaults", err);
+                        }
+                    }
+
                     allTargets.forEach((item: StrategyTarget) => {
                         const realAsset = assets.find((a: Asset) => a.id === item.assetId);
                         const prevAsset = prevDetails?.assets?.find((a: AssetRecord) => a.assetId === item.assetId);
-                        
+
+                        // Use current price from API, fall back to prev snapshot price, then 0.0
+                        const currentPrice = priceMap[item.assetId]?.price;
+                        const prevPrice = prevAsset ? prevAsset.unitPrice : 0;
+
                         initialRows.push({
                             recordId: generateId(),
                             assetId: item.assetId,
-                            name: realAsset ? realAsset.name : item.targetName, 
-                            category: realAsset ? realAsset.type : 'security', 
-                            price: prevAsset ? prevAsset.unitPrice.toString() : '',
+                            name: realAsset ? realAsset.name : item.targetName,
+                            category: realAsset ? realAsset.type : 'security',
+                            price: currentPrice !== undefined ? currentPrice.toString() : (prevPrice > 0 ? prevPrice.toString() : '0.0'),
                             transactionType: 'buy',
                             quantityChange: '',
                             costChange: '',
@@ -105,6 +132,8 @@ export const useSnapshotForm = (
                             note: ''
                         });
                     });
+                } else {
+                    console.log('[SnapshotForm] No active strategy or no layers');
                 }
 
                 // Add assets held in previous month but not in strategy

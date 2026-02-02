@@ -106,6 +106,25 @@ router.post('/:id/price', validateParams(IdParamSchema), validateBody(PriceUpdat
 });
 
 /**
+ * @route   POST /api/assets/prices
+ * @desc    Get prices for multiple assets
+ * @access  Public
+ * @body    {assetIds: string[]} Array of asset IDs
+ */
+router.post('/prices', async (req, res) => {
+    try {
+        const { assetIds } = req.body;
+        if (!assetIds || !Array.isArray(assetIds)) {
+            return sendError(res, { statusCode: 400, message: 'assetIds array required' }, 'Get Prices');
+        }
+        const data = await AssetService.getPrices(assetIds);
+        sendSuccess(res, data, 'Prices retrieved successfully');
+    } catch (e) {
+        sendError(res, e, 'Get Prices');
+    }
+});
+
+/**
  * @route   GET /api/assets/:id/history
  * @desc    Get asset price history
  * @access  Public
@@ -115,8 +134,8 @@ router.get('/:id/history', validateParams(IdParamSchema), async (req, res) => {
     try {
         const data = await AssetService.getHistory(req.params.id);
         sendSuccess(res, data, 'Asset history retrieved successfully');
-    } catch (e) { 
-        sendError(res, e, 'Asset History'); 
+    } catch (e) {
+        sendError(res, e, 'Asset History');
     }
 });
 

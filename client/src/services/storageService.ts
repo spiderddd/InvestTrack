@@ -133,51 +133,132 @@ export const StorageService = {
     } catch (e) { console.error(e); return []; }
   },
 
+  // Update strategy version metadata only
+  updateStrategyVersion: async (id: string, data: { name?: string; description?: string; startDate?: string; status?: 'active' | 'archived' }): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/strategies/${id}/version`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      return res.ok;
+    } catch (e) { console.error(e); return false; }
+  },
+
+  // Update strategy layers only
+  updateStrategyLayers: async (id: string, layers: StrategyVersion['layers']): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/strategies/${id}/layers`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(layers)
+      });
+      return res.ok;
+    } catch (e) { console.error(e); return false; }
+  },
+
+  // Update strategy targets only (grouped by layer)
+  updateStrategyTargets: async (id: string, targetsByLayer: { layerId: string; items: StrategyVersion['layers'][0]['items'] }[]): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/strategies/${id}/targets`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(targetsByLayer)
+      });
+      return res.ok;
+    } catch (e) { console.error(e); return false; }
+  },
+
   // Encapsulated Business Logic: Sync Strategies (Diffing)
-  // 修复：添加操作锁防止并发修改导致数据覆盖
+  // 使用分层 API 更新：version -> layers -> targets
   syncStrategies: async (currentList: StrategyVersion[], newVersions: StrategyVersion[]) => {
-      // 检查是否已有同步操作在进行中
-      if (isSyncingStrategies) {
-          throw new Error('策略同步操作正在进行中，请等待完成后再试');
-      }
+    if (isSyncingStrategies) {
+        throw new Error('策略同步操作正在进行中，请等待完成后再试');
+    }
 
-      try {
-          isSyncingStrategies = true;
+    try {
+        isSyncingStrategies = true;
 
-          const oldIds = new Set(currentList.map(v => v.id));
-          const newIds = new Set(newVersions.map(v => v.id));
+        const oldIds = new Set(currentList.map(v => v.id));
+        const newIds = new Set(newVersions.map(v => v.id));
 
-          // 1. Handle Creates & Updates
-          for (const v of newVersions) {
-              const old = currentList.find(o => o.id === v.id);
-              if (!old) {
-                  const res = await fetch(`${API_BASE}/strategies`, {
-                      method: 'POST',
-                      headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify(v)
-                  });
-                  if (!res.ok) throw new Error(`创建策略失败: ${v.name}`);
-              } else if (JSON.stringify(old) !== JSON.stringify(v)) {
-                  const res = await fetch(`${API_BASE}/strategies/${v.id}`, {
-                      method: 'PUT',
-                      headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify(v)
-                  });
-                  if (!res.ok) throw new Error(`更新策略失败: ${v.name}`);
-              }
-          }
+        // 1. Handle Creates
+        for (const v of newVersions) {
+            const old = currentList.find(o => o.id === v.id);
+            if (!old) {
+                const res = await fetch(`${API_BASE}/strategies`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(v)
+                });
+                if (!res.ok) throw new Error(`创建策略失败: ${v.name}`);
+            }
+        }
 
-          // 2. Handle Deletes
-          for (const old of currentList) {
-              if (!newIds.has(old.id)) {
-                  const res = await fetch(`${API_BASE}/strategies/${old.id}`, { method: 'DELETE' });
-                  if (!res.ok) throw new Error(`删除策略失败: ${old.name}`);
-              }
-          }
-      } finally {
-          // 无论成功失败，都要释放锁
-          isSyncingStrategies = false;
-      }
+        // 2. Handle Updates (使用分层 API)
+        for (const v of newVersions) {
+            const old = currentList.find(o => o.id === v.id);
+            if (old && JSON.stringify(old) !== JSON.stringify(v)) {
+                // Update version metadata
+                if (old.name !== v.name || old.description !== v.description || old.startDate !== v.startDate || old.status !== v.status) {
+                    const versionRes = await fetch(`${API_BASE}/strategies/${v.id}/version`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            name: v.name,
+                            description: v.description,
+                            startDate: v.startDate,
+                            status: v.status
+                        })
+                    });
+                    if (!versionRes.ok) throw new Error(`更新策略版本失败: ${v.name}`);
+                }
+
+                // Check layers change
+                const layersChanged = JSON.stringify(old.layers.map(l => ({ id: l.id, name: l.name, weight: l.weight, description: l.description }))) !==
+                                     JSON.stringify(v.layers.map(l => ({ id: l.id, name: l.name, weight: l.weight, description: l.description })));
+
+                if (layersChanged) {
+                    const layersRes = await fetch(`${API_BASE}/strategies/${v.id}/layers`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(v.layers)
+                    });
+                    if (!layersRes.ok) throw new Error(`更新策略层级失败: ${v.name}`);
+                }
+
+                // Check targets change
+                let targetsChanged = false;
+                const targetsByLayer: { layerId: string; items: StrategyVersion['layers'][0]['items'] }[] = [];
+                for (const newLayer of v.layers) {
+                    const oldLayer = old.layers.find(l => l.id === newLayer.id);
+                    if (!oldLayer || JSON.stringify(oldLayer.items) !== JSON.stringify(newLayer.items)) {
+                        targetsChanged = true;
+                    }
+                    targetsByLayer.push({ layerId: newLayer.id, items: newLayer.items });
+                }
+
+                if (targetsChanged) {
+                    const targetsRes = await fetch(`${API_BASE}/strategies/${v.id}/targets`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(targetsByLayer)
+                    });
+                    if (!targetsRes.ok) throw new Error(`更新策略资产失败: ${v.name}`);
+                }
+            }
+        }
+
+        // 3. Handle Deletes
+        for (const old of currentList) {
+            if (!newIds.has(old.id)) {
+                const res = await fetch(`${API_BASE}/strategies/${old.id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(`删除策略失败: ${old.name}`);
+            }
+        }
+    } finally {
+        isSyncingStrategies = false;
+    }
   },
 
   // --- Snapshots ---

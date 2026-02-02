@@ -1,14 +1,17 @@
 /**
  * @fileoverview Strategy Routes
- * 
+ *
  * API Endpoints for managing investment strategies and their hierarchical structure.
- * 
+ *
  * Routes:
- * - GET    /api/strategies     - List all strategies
- * - POST   /api/strategies     - Create new strategy
- * - PUT    /api/strategies/:id - Update strategy
- * - DELETE /api/strategies/:id - Delete strategy
- * 
+ * - GET    /api/strategies              - List all strategies
+ * - POST   /api/strategies              - Create new strategy
+ * - PUT    /api/strategies/:id          - Update complete strategy
+ * - PUT    /api/strategies/:id/version  - Update version metadata only
+ * - PUT    /api/strategies/:id/layers   - Update layers only
+ * - PUT    /api/strategies/:id/targets  - Update targets only
+ * - DELETE /api/strategies/:id          - Delete strategy
+ *
  * Strategy Hierarchy:
  * - StrategyVersion (Level 1): Overall strategy with start date and status
  *   └── StrategyLayer (Level 2): Structural layers with weights
@@ -19,7 +22,7 @@ import express from 'express';
 import { StrategyService } from '../services/strategyService.js';
 import { sendSuccess, sendCreated, sendError } from '../utils/responseHelper.js';
 import { validateBody, validateParams } from '../validations/middleware.js';
-import { StrategyVersionSchema, StrategyVersionCreateSchema } from '../validations/schemas.js';
+import { StrategyVersionSchema, StrategyVersionCreateSchema, StrategyLayerUpdateSchema } from '../validations/schemas.js';
 import { z } from 'zod';
 
 const router = express.Router();
@@ -59,7 +62,7 @@ router.post('/', validateBody(StrategyVersionCreateSchema), async (req, res) => 
 
 /**
  * @route   PUT /api/strategies/:id
- * @desc    Update existing strategy
+ * @desc    Update existing strategy (complete replacement)
  * @access  Public
  * @params  {string} id - Strategy ID
  * @body    {StrategyVersion} Complete updated strategy
@@ -69,8 +72,80 @@ router.put('/:id', validateParams(IdParamSchema), validateBody(StrategyVersionSc
     try {
         const result = await StrategyService.update(req.params.id, req.body);
         sendSuccess(res, result, 'Strategy updated successfully');
-    } catch (e) { 
-        sendError(res, e, 'Update Strategy'); 
+    } catch (e) {
+        sendError(res, e, 'Update Strategy');
+    }
+});
+
+/**
+ * @route   PUT /api/strategies/:id/version
+ * @desc    Update strategy version metadata only
+ * @access  Public
+ * @params  {string} id - Strategy ID
+ * @body    {Object} version metadata (name, description, startDate, status)
+ * @note    Updates only the version-level information, not layers or targets
+ */
+const VersionUpdateSchema = z.object({
+    name: z.string().min(1).optional(),
+    description: z.string().optional(),
+    startDate: z.string().optional(),
+    status: z.enum(['active', 'archived']).optional()
+});
+
+router.put('/:id/version', validateParams(IdParamSchema), validateBody(VersionUpdateSchema), async (req, res) => {
+    try {
+        const result = await StrategyService.updateVersion(req.params.id, req.body);
+        sendSuccess(res, result, 'Strategy version updated successfully');
+    } catch (e) {
+        sendError(res, e, 'Update Strategy Version');
+    }
+});
+
+/**
+ * @route   PUT /api/strategies/:id/layers
+ * @desc    Update strategy layers only
+ * @access  Public
+ * @params  {string} id - Strategy ID
+ * @body    {Array<StrategyLayer>} Array of layers with their configuration
+ * @note    Updates only the layers, preserving targets within each layer
+ */
+const LayersUpdateSchema = z.array(StrategyLayerUpdateSchema);
+
+router.put('/:id/layers', validateParams(IdParamSchema), validateBody(LayersUpdateSchema), async (req, res) => {
+    try {
+        const result = await StrategyService.updateLayers(req.params.id, req.body);
+        sendSuccess(res, result, 'Strategy layers updated successfully');
+    } catch (e) {
+        sendError(res, e, 'Update Strategy Layers');
+    }
+});
+
+/**
+ * @route   PUT /api/strategies/:id/targets
+ * @desc    Update strategy targets (assets) only
+ * @access  Public
+ * @params  {string} id - Strategy ID
+ * @body    {Array<{layerId: string, items: Array<StrategyTarget>}>} Targets grouped by layer
+ * @note    Updates only the targets (asset allocations) within each layer
+ */
+const TargetsUpdateSchema = z.array(z.object({
+    layerId: z.string().min(1),
+    items: z.array(z.object({
+        id: z.string().optional(),
+        assetId: z.string(),
+        targetName: z.string(),
+        weight: z.number(),
+        color: z.string(),
+        note: z.string().optional()
+    }))
+}));
+
+router.put('/:id/targets', validateParams(IdParamSchema), validateBody(TargetsUpdateSchema), async (req, res) => {
+    try {
+        const result = await StrategyService.updateTargets(req.params.id, req.body);
+        sendSuccess(res, result, 'Strategy targets updated successfully');
+    } catch (e) {
+        sendError(res, e, 'Update Strategy Targets');
     }
 });
 

@@ -25,10 +25,20 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'entry'>('list');
 
-  // Determine active strategy based on current date context (default to latest)
+  // Determine active strategy based on current date context (default to latest, prefer active)
   const tempDate = new Date().toISOString().slice(0, 7);
+
   const activeStrategy = useMemo(() => {
-    return getStrategyForDate(versions, tempDate) || versions[versions.length - 1];
+    // Priority 1: Find active strategy that matches the date
+    const activeVersions = versions.filter(v => v.status === 'active');
+    const activeMatch = activeVersions.length > 0
+      ? getStrategyForDate(activeVersions, tempDate)
+      : null;
+
+    // Priority 2: Fall back to latest version (even if archived)
+    const fallback = versions.length > 0 ? versions[versions.length - 1] : null;
+
+    return activeMatch || fallback;
   }, [versions, tempDate]);
 
   // Use Custom Hook for Form Logic - Lifted here to pass down
