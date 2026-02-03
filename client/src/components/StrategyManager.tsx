@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { 
-  Plus, Trash2, Edit2, AlertCircle, History, Copy, Calendar, BookOpen, 
+import {
+  Plus, Trash2, Edit2, AlertCircle, History, Copy, Calendar, BookOpen,
   Save, X, Layers, Layout, Calculator, Maximize2, ArrowLeft, FileText, Sparkles
 } from 'lucide-react';
 import { StrategyVersion, StrategyLayer, StrategyTarget, Asset } from '@shared/types';
 import { generateId, StorageService } from '../services/storageService';
+import ConfirmDialog from './ConfirmDialog';
 
 interface StrategyManagerProps {
   strategies: StrategyVersion[]; 
@@ -37,6 +38,7 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
   // Modals
   const [modalLayer, setModalLayer] = useState<{ isOpen: boolean, layerId?: string, name: string, desc: string, weight: string }>({ isOpen: false, name: '', desc: '', weight: '' });
   const [modalAsset, setModalAsset] = useState<{ isOpen: boolean, layerId: string, item?: StrategyTarget, assetId: string, weight: string, note: string, color: string }>({ isOpen: false, layerId: '', assetId: '', weight: '', note: '', color: PRESET_COLORS[0] });
+  const [modalDelete, setModalDelete] = useState<{ isOpen: boolean, versionId: string, versionName: string }>({ isOpen: false, versionId: '', versionName: '' });
 
   // Initialization
   useEffect(() => {
@@ -258,11 +260,26 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
 
   const handleSaveMeta = () => {
     if (!currentVersion) return;
-    const updated = versions.map(v => 
+    const updated = versions.map(v =>
       v.id === currentVersion.id ? { ...v, name: metaName, description: metaDesc, startDate: metaDate } : v
     );
     onUpdate(updated);
     setIsEditingMeta(false);
+  };
+
+  const handleDeleteVersion = async () => {
+    try {
+      await StorageService.deleteStrategyVersion(modalDelete.versionId);
+      const updated = versions.filter(v => v.id !== modalDelete.versionId);
+      onUpdate(updated);
+      if (activeVersionId === modalDelete.versionId) {
+        setActiveVersionId(updated.length > 0 ? updated[0].id : null);
+      }
+      setModalDelete({ ...modalDelete, isOpen: false });
+    } catch (e) {
+      console.error(e);
+      alert('删除策略失败');
+    }
   };
 
   const totalLayerWeight = currentVersion ? currentVersion.layers.reduce((sum: number, l: StrategyLayer) => sum + l.weight, 0) : 0;
@@ -393,7 +410,18 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
               <div key={v.id} onClick={() => setActiveVersionId(v.id)} className={`p-3 rounded-lg border cursor-pointer ${activeVersionId === v.id ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-100'}`}>
                 <div className="flex justify-between items-start mb-1">
                   <span className={`font-bold text-sm ${activeVersionId === v.id ? 'text-blue-800' : 'text-slate-700'}`}>{v.name}</span>
-                  {v.status === 'active' && <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded">Active</span>}
+                  <div className="flex items-center gap-1">
+                    {v.status === 'active' && <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded">Active</span>}
+                    {v.status !== 'active' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setModalDelete({ isOpen: true, versionId: v.id, versionName: v.name }); }}
+                        className="p-1 text-slate-400 hover:text-red-600 rounded"
+                        title="删除策略"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="text-xs text-slate-400">{v.startDate}</div>
               </div>
@@ -626,6 +654,13 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
         </div>
       )}
 
+      <ConfirmDialog
+        isOpen={modalDelete.isOpen}
+        title="删除策略"
+        message={`确定删除策略 "${modalDelete.versionName}" 吗？此操作将同时删除该策略下所有层级和资产配置，且无法撤销。`}
+        onConfirm={handleDeleteVersion}
+        onCancel={() => setModalDelete({ ...modalDelete, isOpen: false })}
+      />
     </div>
   );
 };

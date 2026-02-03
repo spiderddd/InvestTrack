@@ -260,6 +260,11 @@ export const StorageService = {
         isSyncingStrategies = false;
     }
   },
+  deleteStrategyVersion: async (id: string) => {
+      const res = await fetch(`${API_BASE}/strategies/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('删除策略失败');
+      return res.json();
+  },
 
   // --- Snapshots ---
   

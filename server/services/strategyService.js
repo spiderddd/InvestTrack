@@ -234,7 +234,18 @@ export const StrategyService = {
     },
 
     delete: async (id) => {
-        await runQuery("DELETE FROM strategy_versions WHERE id=?", [id]);
+        await withTransaction(async () => {
+            const layers = await getQuery("SELECT id FROM strategy_layers WHERE version_id=?", [id]);
+            const layerIds = layers.map(l => l.id);
+
+            if (layerIds.length > 0) {
+                const placeholders = layerIds.map(() => '?').join(',');
+                await runQuery(`DELETE FROM strategy_targets WHERE layer_id IN (${placeholders})`, layerIds);
+            }
+
+            await runQuery("DELETE FROM strategy_layers WHERE version_id=?", [id]);
+            await runQuery("DELETE FROM strategy_versions WHERE id=?", [id]);
+        });
         return { success: true };
     }
 };
