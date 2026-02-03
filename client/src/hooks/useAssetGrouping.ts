@@ -46,17 +46,8 @@ export const useAssetGrouping = (assets: Asset[], propsSnapshots: SnapshotItem[]
       let targetDate = selectedDate;
       
       if (selectedDate === 'latest') {
-        // If 'latest' is selected, use the latest date from propsSnapshots
-        if (propsSnapshots.length > 0) {
-          // Find the snapshot with the latest date
-          const latestSnapshot = propsSnapshots.reduce((latest, current) => {
-            return new Date(current.date) > new Date(latest.date) ? current : latest;
-          });
-          targetDate = latestSnapshot.date;
-        } else {
-          setViewSnapshot(null);
-          return;
-        }
+        // Use today's date for real-time portfolio view with latest prices
+        targetDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
       }
       
       const details = await StorageService.getSnapshotByDate(targetDate);

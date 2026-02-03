@@ -44,11 +44,14 @@ export const SnapshotService = {
         let totalValue = 0;
         let totalInvested = 0;
 
+        // Convert YYYY-MM to YYYY-MM-DD (last day of month) for price query
+        const priceDate = date.length === 7 ? `${date}-31` : date;
+        
         for (const h of holdings) {
             if (Math.abs(h.quantity) < 0.000001) continue;
             const priceRow = await getQuery(
                 `SELECT price FROM market_prices WHERE asset_id=? AND date<=? ORDER BY date DESC LIMIT 1`,
-                [h.asset_id, date]
+                [h.asset_id, priceDate]
             );
             const price = priceRow.length > 0 ? priceRow[0].price : 0;
             totalValue += (h.quantity * price);
@@ -118,12 +121,14 @@ export const SnapshotService = {
             const assetsWithPrice = [];
             let totalValue = 0;
             let totalInvested = 0;
+            // Convert YYYY-MM to YYYY-MM-DD (last day of month) for price comparison
+            const priceDate = snapshotDate.length === 7 ? `${snapshotDate}-31` : snapshotDate;
             for (const [assetId, state] of runningState.entries()) {
                 if (Math.abs(state.quantity) < 0.000001) continue;
                 const assetPrices = pricesByAsset.get(assetId) || [];
                 let price = 0;
                 for (let i = assetPrices.length - 1; i >= 0; i--) {
-                    if (assetPrices[i].date <= snapshotDate) {
+                    if (assetPrices[i].date <= priceDate) {
                         price = assetPrices[i].price;
                         break;
                     }
@@ -182,6 +187,9 @@ export const SnapshotService = {
         const flowMap = new Map();
         flows.forEach(f => flowMap.set(f.asset_id, { q: f.quantity_change, c: f.cost_change, n: f.note }));
 
+        // Convert YYYY-MM to YYYY-MM-DD (last day of month) for price query
+        const priceDate = snapshotDate.length === 7 ? `${snapshotDate}-31` : snapshotDate;
+        
         const fullAssets = await Promise.all(holdings.map(async (h) => {
             const assetInfo = await getQuery("SELECT name, type FROM assets WHERE id = ?", [h.assetId]);
             const meta = assetInfo[0] || { name: 'Unknown', type: 'other' };
@@ -190,7 +198,7 @@ export const SnapshotService = {
                 SELECT price FROM market_prices 
                 WHERE asset_id = ? AND date <= ? 
                 ORDER BY date DESC LIMIT 1
-            `, [h.assetId, snapshotDate]);
+            `, [h.assetId, priceDate]);
 
             let unitPrice = priceRow.length > 0 ? priceRow[0].price : 0;
             if (unitPrice === 0 && (meta.type === 'fixed' || meta.type === 'wealth')) {
@@ -218,18 +226,107 @@ export const SnapshotService = {
         return snapshot;
     },
 
-    // New helper for asset manager time travel
+    // New helper for asset manager time travel (supports YYYY-MM or YYYY-MM-DD)
     getDetailsByDate: async (date) => {
         if (!date) throw { statusCode: 400, message: "Date required" };
-        let rows;
-        if (date === 'latest') {
-            rows = await getQuery("SELECT id FROM snapshots ORDER BY date DESC LIMIT 1");
-        } else {
-            rows = await getQuery("SELECT id FROM snapshots WHERE date = ?", [date]);
+        
+        const isFullDate = date.length === 10;
+        let snapshotDate = date;
+        let priceDate = date;
+        
+        if (isFullDate) {
+            // For YYYY-MM-DD, find the latest snapshot <= this date (compare YYYY-MM parts)
+            const monthPart = date.slice(0, 7);  // YYYY-MM
+            const snapshotRows = await getQuery(
+                "SELECT id, date FROM snapshots WHERE date <= ? ORDER BY date DESC LIMIT 1",
+                [monthPart]
+            );
+            if (snapshotRows.length === 0) {
+                console.log(`[SnapshotService] No snapshot found <= ${monthPart}`);
+                return null;
+            }
+            snapshotDate = snapshotRows[0].date;
+            console.log(`[SnapshotService] Real-time view: date=${date}, using snapshot=${snapshotDate}`);
         }
         
-        if (rows.length === 0) return null;
-        return await SnapshotService.getDetails(rows[0].id);
+        // Get the snapshot header
+        const headerRows = await getQuery("SELECT id, date, note FROM snapshots WHERE date = ?", [snapshotDate]);
+        if (headerRows.length === 0) {
+            console.log(`[SnapshotService] Snapshot not found: ${snapshotDate}`);
+            return null;
+        }
+        
+        const snapshot = headerRows[0];
+        const snapshotId = snapshot.id;
+        
+        // Calculate holdings up to the target date
+        const holdingsSql = `
+            SELECT 
+                t.asset_id as assetId,
+                SUM(t.quantity_change) as quantity,
+                SUM(t.cost_change) as totalCost
+            FROM transactions t
+            WHERE t.date <= ?
+            GROUP BY t.asset_id
+            HAVING ABS(quantity) > 0.000001
+        `;
+        const holdings = await getQuery(holdingsSql, [priceDate]);
+        console.log(`[SnapshotService] Holdings count for ${priceDate}: ${holdings.length}`);
+
+        // Get snapshot-specific transactions for note/flow tracking (only for month view)
+        let flowMap = new Map();
+        if (!isFullDate) {
+            const flowSql = `SELECT asset_id, quantity_change, cost_change, note FROM transactions WHERE snapshot_id = ?`;
+            const flows = await getQuery(flowSql, [snapshotId]);
+            flows.forEach(f => flowMap.set(f.asset_id, { q: f.quantity_change, c: f.cost_change, n: f.note }));
+        }
+
+        // Build assets with real-time prices
+        const fullAssets = await Promise.all(holdings.map(async (h) => {
+            const assetInfo = await getQuery("SELECT name, type FROM assets WHERE id = ?", [h.assetId]);
+            const meta = assetInfo[0] || { name: 'Unknown', type: 'other' };
+
+            const priceRow = await getQuery(`
+                SELECT price FROM market_prices 
+                WHERE asset_id = ? AND date <= ? 
+                ORDER BY date DESC LIMIT 1
+            `, [h.assetId, priceDate]);
+
+            let unitPrice = priceRow.length > 0 ? priceRow[0].price : 0;
+            if (unitPrice === 0 && (meta.type === 'fixed' || meta.type === 'wealth')) {
+                unitPrice = 1;
+            }
+
+            // For real-time view, show 0 for addedQuantity/addedPrincipal (we're viewing, not editing)
+            const currentFlow = isFullDate ? { q: 0, c: 0, n: '' } : (flowMap.get(h.assetId) || { q: 0, c: 0, n: '' });
+
+            return {
+                id: uuidv4(),
+                assetId: h.assetId,
+                name: meta.name,
+                category: meta.type,
+                unitPrice: unitPrice,
+                quantity: h.quantity,
+                marketValue: h.quantity * unitPrice,
+                totalCost: h.totalCost,
+                addedQuantity: currentFlow.q,
+                addedPrincipal: currentFlow.c,
+                note: currentFlow.n || ''
+            };
+        }));
+
+        // Calculate totals
+        const totalValue = fullAssets.reduce((sum, a) => sum + a.marketValue, 0);
+        const totalInvested = fullAssets.reduce((sum, a) => sum + a.totalCost, 0);
+
+        return {
+            id: snapshotId,
+            date: isFullDate ? priceDate : snapshotDate,
+            note: snapshot.note,
+            totalValue,
+            totalInvested,
+            assets: fullAssets
+        };
     },
 
     // Treat 'snapshots' table as a Write-Through Cache

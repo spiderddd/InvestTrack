@@ -26,8 +26,8 @@ const router = express.Router();
 // Schema for ID parameter validation
 const IdParamSchema = z.object({ id: z.string().min(1) });
 
-// Schema for date query parameter validation
-const DateQuerySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}$/, 'Date must be YYYY-MM format') });
+// Schema for date query parameter validation (supports YYYY-MM and YYYY-MM-DD)
+const DateQuerySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}(-\d{2})?$/, 'Date must be YYYY-MM or YYYY-MM-DD format') });
 
 /**
  * @route   GET /api/snapshots

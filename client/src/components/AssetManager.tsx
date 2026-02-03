@@ -214,16 +214,23 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
                         ¥{marketValue.toLocaleString()}
                     </div>
                     
-                    {/* Profitability Indicators */}
-                    {status && status.totalCost > 0 && (
-                        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-sm font-bold ${trendBg} ${trendColor}`}>
-                            <span>{trendSign}{Math.abs(profit).toLocaleString()}</span>
-                            <span className="opacity-80 text-xs">| {trendSign}{roi.toFixed(2)}%</span>
-                        </div>
-                    )}
-                 </div>
-            </div>
-        </div>
+                     {/* Profitability Indicators */}
+                     {status && status.totalCost > 0 && (
+                         <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-sm font-bold ${trendBg} ${trendColor}`}>
+                             <span>{trendSign}{Math.abs(profit).toLocaleString()}</span>
+                             <span className="opacity-80 text-xs">| {trendSign}{roi.toFixed(2)}%</span>
+                         </div>
+                     )}
+                  </div>
+
+                  {/* Unit Price - 不显示存款、现金、银行理财类 */}
+                  {isHeld && status && !['fixed', 'wealth'].includes(asset.type) && (
+                     <div className="mt-2 text-xs text-slate-500">
+                         单价: <span className="font-mono font-medium text-slate-700">¥{status.unitPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                     </div>
+                  )}
+             </div>
+         </div>
         
         {/* Footer for Held Assets */}
         {isHeld && status && (
@@ -467,7 +474,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
                         {/* Summary Cards */}
                         {historyData.length > 0 ? (
                             <>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                                     <div className="text-xs text-slate-500 mb-1">当前市值</div>
                                     <div className="text-xl font-bold text-slate-800">
@@ -490,6 +497,12 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
                                     <div className="text-xs text-slate-500 mb-1">持有数量</div>
                                     <div className="text-xl font-bold text-slate-800">
                                         {historyData[historyData.length - 1]!.quantity.toLocaleString()}
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div className="text-xs text-slate-500 mb-1">最近单价</div>
+                                    <div className="text-xl font-bold text-slate-800 font-mono">
+                                        ¥{historyData[historyData.length - 1]!.unitPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                                     </div>
                                 </div>
                             </div>

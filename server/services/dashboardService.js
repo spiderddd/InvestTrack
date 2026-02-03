@@ -15,7 +15,12 @@ const LAYER_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#6
 
 const getStrategyForDate = (versions, dateStr) => {
     if (!versions || versions.length === 0) return null;
-    const sorted = [...versions].sort((a, b) => b.startDate.localeCompare(a.startDate));
+    
+    // Filter out archived strategies, prefer active ones
+    const activeVersions = versions.filter(v => v.status === 'active');
+    const versionsToUse = activeVersions.length > 0 ? activeVersions : versions;
+    
+    const sorted = [...versionsToUse].sort((a, b) => b.startDate.localeCompare(a.startDate));
     const targetDate = dateStr.length === 7 ? `${dateStr}-31` : dateStr;
     return sorted.find(v => v.startDate <= targetDate) || sorted[sorted.length - 1]; 
 };
@@ -55,58 +60,65 @@ export const DashboardService = {
         };
     },
 
-    // 1. 核心指标 (Metrics)
+    // 1. 核心指标 (Metrics) - Uses real-time prices for current value
     getMetrics: async ({ viewMode, timeRange }) => {
-        const { items: snapshots } = await SnapshotService.getList(1, 1000); // Get light list
+        const { items: snapshots } = await SnapshotService.getList(1, 1000);
         if (snapshots.length === 0) return { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 };
 
         const sorted = snapshots.sort((a, b) => a.date.localeCompare(b.date));
-        const endSnapshotSimple = sorted[sorted.length - 1];
+        
+        // Get real-time current portfolio
+        const today = new Date().toISOString().slice(0, 10);
+        const realTimeSnapshot = await SnapshotService.getDetailsByDate(today);
         
         let startSnapshotSimple = null;
         if (timeRange === 'ytd') {
             const currentYear = new Date().getFullYear();
             startSnapshotSimple = sorted.find(s => s.date.startsWith(currentYear.toString())) || sorted[0];
             // If the first snapshot of the year is the same as the end (Jan), try to find prev Dec
-            if(startSnapshotSimple.id === endSnapshotSimple.id && sorted.length > 1) {
+            if(startSnapshotSimple && sorted.length > 1) {
                  const idx = sorted.indexOf(startSnapshotSimple);
-                 if(idx > 0) startSnapshotSimple = sorted[idx-1];
+                 if(idx > 0 && sorted[idx].date === startSnapshotSimple.date) {
+                     startSnapshotSimple = sorted[idx-1];
+                 }
             }
         } else if (timeRange === '1y') {
             const oneYearAgo = new Date();
             oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
             const dateStr = oneYearAgo.toISOString().slice(0, 7);
             startSnapshotSimple = sorted.find(s => s.date >= dateStr) || sorted[0];
-        } else {
-            // All time: implicitly comparing to 0 (or first snapshot for attribution logic)
-            startSnapshotSimple = null; 
         }
 
-        // Fetch details to calculate strategy specific values
-        const endDetails = await SnapshotService.getDetails(endSnapshotSimple.id);
+        // For start period, use historical snapshot
         const startDetails = startSnapshotSimple ? await SnapshotService.getDetails(startSnapshotSimple.id) : null;
         
         const strategies = await StrategyService.getAll();
         
-        const filterStrategyAssets = (snapshot) => {
+        const filterStrategyAssets = (snapshot, useRealTime = false) => {
             if (!snapshot) return { v: 0, i: 0 };
-            if (viewMode === 'total') return { v: snapshot.totalValue, i: snapshot.totalInvested };
             
-            const activeStrat = getStrategyForDate(strategies, snapshot.date);
-            const map = getAssetTargetMap(activeStrat);
-            const assets = snapshot.assets.filter(a => map.has(a.assetId));
+            const assets = snapshot.assets || [];
+            let filteredAssets = assets;
+            
+            if (viewMode !== 'total') {
+                const activeStrat = getStrategyForDate(strategies, useRealTime ? today : snapshot.date);
+                const map = getAssetTargetMap(activeStrat);
+                filteredAssets = assets.filter(a => map.has(a.assetId));
+            }
             
             return {
-                v: assets.reduce((sum, a) => sum + a.marketValue, 0),
-                i: assets.reduce((sum, a) => sum + a.totalCost, 0)
+                v: filteredAssets.reduce((sum, a) => sum + a.marketValue, 0),
+                i: filteredAssets.reduce((sum, a) => sum + a.totalCost, 0)
             };
         };
 
-        const endM = filterStrategyAssets(endDetails);
-        const startM = filterStrategyAssets(startDetails);
+        // End value uses real-time snapshot with latest prices
+        const endM = filterStrategyAssets(realTimeSnapshot, true);
+        // Start value uses historical snapshot
+        const startM = filterStrategyAssets(startDetails, false);
 
         const profit = (endM.v - endM.i) - (startM.v - startM.i);
-        const returnRate = endM.i > 0 ? (profit / endM.i) * 100 : 0; // Approximate period return based on current invested
+        const returnRate = endM.i > 0 ? (profit / endM.i) * 100 : 0;
 
         return {
             endValue: endM.v,
@@ -117,18 +129,20 @@ export const DashboardService = {
         };
     },
 
-    // 2. 资产分布 (Allocation)
+    // 2. 资产分布 (Allocation) - Uses latest real-time prices
     getAllocation: async ({ viewMode, layerId }) => {
-        const { items: snapshots } = await SnapshotService.getList(1, 1);
-        if (snapshots.length === 0) return [];
+        const today = new Date().toISOString().slice(0, 10);
         
-        const latestId = snapshots[0].id; // SnapshotService returns DESC by default
-        const endSnapshot = await SnapshotService.getDetails(latestId);
+        // Get real-time portfolio with latest prices (similar to AssetManager)
+        const realTimeSnapshot = await SnapshotService.getDetailsByDate(today);
+        if (!realTimeSnapshot || !realTimeSnapshot.assets) return [];
+        
+        const assets = realTimeSnapshot.assets;
+        const totalValue = assets.reduce((sum, a) => sum + a.marketValue, 0);
         
         // 1. Total View
         if (viewMode === 'total') {
-            const totalValue = endSnapshot.totalValue;
-            const grouped = endSnapshot.assets.reduce((acc, curr) => {
+            const grouped = assets.reduce((acc, curr) => {
                 let cat = '其他';
                 switch (curr.category) {
                   case 'security': case 'fund': cat = '股票基金'; break;
@@ -150,18 +164,18 @@ export const DashboardService = {
 
         // 2. Strategy View
         const strategies = await StrategyService.getAll();
-        const activeStrategy = getStrategyForDate(strategies, endSnapshot.date);
+        const activeStrategy = getStrategyForDate(strategies, today);
         
         if (!activeStrategy) return [];
         const assetTargetMap = getAssetTargetMap(activeStrategy);
-        const stratTotal = endSnapshot.assets
+        const stratTotal = assets
             .filter(a => assetTargetMap.has(a.assetId))
             .reduce((sum, a) => sum + a.marketValue, 0);
 
         // 2a. Layer View
         if (!layerId) {
             return activeStrategy.layers.map((layer, idx) => {
-                const layerActualValue = endSnapshot.assets.reduce((sum, asset) => {
+                const layerActualValue = assets.reduce((sum, asset) => {
                     const mapping = assetTargetMap.get(asset.assetId);
                     if (mapping && mapping.layerId === layer.id) {
                         return sum + asset.marketValue;
@@ -187,8 +201,8 @@ export const DashboardService = {
             if (!layer) return [];
             
             const getTargetActualValue = (target) => {
-                const assets = endSnapshot.assets.filter(a => a.assetId === target.assetId);
-                return assets.reduce((sum, a) => sum + a.marketValue, 0);
+                const targetAssets = assets.filter(a => a.assetId === target.assetId);
+                return targetAssets.reduce((sum, a) => sum + a.marketValue, 0);
             };
 
             const layerTotalValue = layer.items.reduce((sum, t) => sum + getTargetActualValue(t), 0);
@@ -268,21 +282,27 @@ export const DashboardService = {
         return result;
     },
 
-    // 4. 收益归因 (Attribution)
+    // 4. 收益归因 (Attribution) - Uses real-time prices for current period
     getAttribution: async ({ viewMode, timeRange, layerId }) => {
         const { items: snapshots } = await SnapshotService.getList(1, 1000);
         if (snapshots.length === 0) return [];
         
         const sorted = snapshots.sort((a, b) => a.date.localeCompare(b.date));
-        const endSnapshotSimple = sorted[sorted.length - 1];
+        
+        // For real-time end value, use today's date with latest prices
+        const today = new Date().toISOString().slice(0, 10);
+        const realTimeSnapshot = await SnapshotService.getDetailsByDate(today);
+        if (!realTimeSnapshot) return [];
         
         let startSnapshotSimple = null;
         if (timeRange === 'ytd') {
             const currentYear = new Date().getFullYear();
             startSnapshotSimple = sorted.find(s => s.date.startsWith(currentYear.toString())) || sorted[0];
-            if(startSnapshotSimple.id === endSnapshotSimple.id && sorted.length > 1) {
+            if(startSnapshotSimple && sorted.length > 1) {
                  const idx = sorted.indexOf(startSnapshotSimple);
-                 if(idx > 0) startSnapshotSimple = sorted[idx-1];
+                 if(idx > 0 && sorted[idx].date === startSnapshotSimple.date) {
+                     startSnapshotSimple = sorted[idx-1];
+                 }
             }
         } else if (timeRange === '1y') {
             const oneYearAgo = new Date();
@@ -291,11 +311,12 @@ export const DashboardService = {
             startSnapshotSimple = sorted.find(s => s.date >= dateStr) || sorted[0];
         }
 
-        const endSnapshot = await SnapshotService.getDetails(endSnapshotSimple.id);
-        const startSnapshot = startSnapshotSimple ? await SnapshotService.getDetails(startSnapshotSimple.id) : { assets: [] }; // Mock empty start if all time
+        // End snapshot uses real-time prices, start snapshot uses historical
+        const endSnapshot = realTimeSnapshot;
+        const startSnapshot = startSnapshotSimple ? await SnapshotService.getDetails(startSnapshotSimple.id) : { assets: [] };
 
         const strategies = await StrategyService.getAll();
-        const activeStrategy = getStrategyForDate(strategies, endSnapshot.date);
+        const activeStrategy = getStrategyForDate(strategies, today);
 
         const getStats = (s, assetIds) => {
             if (!s || !s.assets) return { v: 0, c: 0 };

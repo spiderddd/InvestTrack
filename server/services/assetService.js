@@ -76,15 +76,15 @@ export const AssetService = {
     },
 
     // New: Update Latest Price (for Crawler/API)
-    updatePrice: async (assetId, price, date) => {
+    updatePrice: async (assetId, price, date, source = 'manual') => {
         const id = uuidv4();
         const now = Date.now();
         // Upsert logic
         await runQuery(`
             INSERT INTO market_prices (id, asset_id, date, price, source, updated_at)
-            VALUES (?, ?, ?, ?, 'manual', ?)
-            ON CONFLICT(asset_id, date) DO UPDATE SET price=excluded.price, updated_at=excluded.updated_at
-        `, [id, assetId, date, price, now]);
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(asset_id, date) DO UPDATE SET price=excluded.price, source=excluded.source, updated_at=excluded.updated_at
+        `, [id, assetId, date, price, source, now]);
         return { success: true };
     },
 
@@ -193,5 +193,23 @@ export const AssetService = {
             });
         }
         return history;
+    },
+
+    getByType: async (type) => {
+        return await getQuery(
+            "SELECT id, type, name, ticker, note FROM assets WHERE type = ? ORDER BY name",
+            [type]
+        );
+    },
+
+    getLatestPrice: async (assetId) => {
+        const rows = await getQuery(`
+            SELECT price, date, source
+            FROM market_prices
+            WHERE asset_id = ?
+            ORDER BY date DESC
+            LIMIT 1
+        `, [assetId]);
+        return rows[0] || null;
     }
 };
