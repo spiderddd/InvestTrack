@@ -36,7 +36,7 @@ export const StrategyTargetSchema = z.object({
   id: IdSchema,
   assetId: IdSchema,
   targetName: z.string().min(1, 'Target name is required'),
-  weight: z.number().min(0).max(100, 'Weight must be between 0 and 100'),
+  weight: z.number().min(-1).max(100, 'Weight must be between -1 and 100'),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color must be hex format like #3b82f6'),
   note: z.string().max(500).optional()
 });
@@ -47,7 +47,7 @@ export const StrategyTargetSchema = z.object({
 export const StrategyLayerSchema = z.object({
   id: IdSchema,
   name: z.string().min(1, 'Layer name is required').max(50),
-  weight: z.number().min(0).max(100, 'Weight must be between 0 and 100'),
+  weight: z.number().min(-1).max(100, 'Weight must be between -1 and 100'),
   description: z.string().max(500).optional(),
   items: z.array(StrategyTargetSchema)
 });
@@ -58,7 +58,7 @@ export const StrategyLayerSchema = z.object({
 export const StrategyLayerUpdateSchema = z.object({
   id: IdSchema.optional(),
   name: z.string().min(1, 'Layer name is required').max(50),
-  weight: z.number().min(0).max(100, 'Weight must be between 0 and 100'),
+  weight: z.number().min(-1).max(100, 'Weight must be between -1 and 100'),
   description: z.string().max(500).optional(),
   items: z.array(StrategyTargetSchema).optional()
 });
