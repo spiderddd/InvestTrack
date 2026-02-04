@@ -6,26 +6,27 @@ import { lruCache } from '../utils/cache.js';
 export const SnapshotService = {
     getList: async (page = 1, limit = 20) => {
         const offset = (page - 1) * limit;
-        const countResult = await getQuery("SELECT COUNT(*) as count FROM snapshots");
+
+        const [countResult, rows] = await Promise.all([
+            getQuery("SELECT COUNT(*) as count FROM snapshots"),
+            getQuery(`
+                SELECT
+                    s.id, s.date, s.note,
+                    COALESCE(SUM(t.cost_change), 0) as totalInvested
+                FROM snapshots s
+                LEFT JOIN transactions t ON s.date = t.date
+                GROUP BY s.id, s.date, s.note
+                ORDER BY s.date DESC
+                LIMIT ? OFFSET ?
+            `, [limit, offset])
+        ]);
+
         const total = countResult[0].count;
-        
-        const sql = `
-            SELECT id, date, note
-            FROM snapshots
-            ORDER BY date DESC
-            LIMIT ? OFFSET ?
-        `;
-        
-        const rows = await getQuery(sql, [limit, offset]);
-        const items = await Promise.all(rows.map(async (r) => {
-            const totals = await SnapshotService.calculateTotals(r.date);
-            return {
-                id: r.id,
-                date: r.date,
-                totalValue: totals.totalValue,
-                totalInvested: totals.totalInvested,
-                note: r.note,
-            };
+        const items = rows.map(r => ({
+            id: r.id,
+            date: r.date,
+            note: r.note,
+            totalInvested: r.totalInvested,
         }));
         return { items, total, page: parseInt(page), limit: parseInt(limit) };
     },

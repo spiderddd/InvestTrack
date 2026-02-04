@@ -255,7 +255,6 @@ export const useSnapshotForm = (
             id: selectedSnapshotId || generateId(),
             date,
             assets: finalAssets,
-            totalValue: totalVal,
             totalInvested: totalInv,
             note: note
         };

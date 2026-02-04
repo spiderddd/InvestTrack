@@ -72,9 +72,8 @@ export interface SnapshotItem {
   id: string;
   date: string; // YYYY-MM
   assets?: AssetRecord[]; // Optional: List views only need summaries
-  totalValue: number; 
   totalInvested: number;
-  note?: string; 
+  note?: string;
 }
 
 // App Data Container

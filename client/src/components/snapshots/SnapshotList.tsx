@@ -70,8 +70,8 @@ export const SnapshotList: React.FC<SnapshotListProps> = ({
                                             <div className="text-lg font-bold text-slate-800">{s.date.split('-')[1]}</div>
                                         </div>
                                         <div>
-                                            <div className="text-sm text-slate-500">总资产</div>
-                                            <div className="font-bold text-slate-800 text-lg">¥{(s.totalValue ?? 0).toLocaleString()}</div>
+                                            <div className="text-sm text-slate-500">本月投入</div>
+                                            <div className="font-bold text-slate-800 text-lg">¥{(s.totalInvested ?? 0).toLocaleString()}</div>
                                         </div>
                                     </div>
 
