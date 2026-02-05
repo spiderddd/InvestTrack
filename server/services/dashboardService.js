@@ -118,11 +118,16 @@ export const DashboardService = {
         const startM = filterStrategyAssets(startDetails, false);
 
         const profit = (endM.v - endM.i) - (startM.v - startM.i);
-        const returnRate = endM.i > 0 ? (profit / endM.i) * 100 : 0;
+        // 区间收益率：全部时间用期末投入，区间用期初市值
+        const returnRate = timeRange === 'all'
+          ? (endM.i > 0 ? (profit / endM.i) * 100 : 0)
+          : (startM.v > 0 ? (profit / startM.v) * 100 : 0);
 
         return {
             endValue: endM.v,
             endInvested: endM.i,
+            startValue: startM.v,
+            startInvested: startM.i,
             profit,
             returnRate,
             periodLabel: timeRange === 'all' ? '历史累计' : (timeRange === 'ytd' ? '今年以来' : '近一年')

@@ -15,11 +15,14 @@ export const MetricsCards: React.FC<MetricsCardsProps> = ({
     viewMode, timeRange, rangeConfig, loading, endMetrics, startMetrics
 }) => {
     const displayValue = endMetrics.value;
-    const displayInvested = endMetrics.invested; 
-    const periodProfit = timeRange === 'all' 
+    const displayInvested = endMetrics.invested;
+    const periodProfit = timeRange === 'all'
       ? (endMetrics.value - endMetrics.invested)
       : (endMetrics.value - endMetrics.invested) - (startMetrics.value - startMetrics.invested);
-    const returnRate = displayInvested > 0 ? (periodProfit / displayInvested) * 100 : 0;
+    // 区间收益率：全部时间用期末投入，区间用期初投入
+    const returnRate = timeRange === 'all'
+      ? (displayInvested > 0 ? (periodProfit / displayInvested) * 100 : 0)
+      : (startMetrics.invested > 0 ? (periodProfit / startMetrics.invested) * 100 : 0);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
