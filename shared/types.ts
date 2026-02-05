@@ -40,6 +40,8 @@ export interface StrategyVersion {
   description: string;
   startDate: string; // YYYY-MM-DD
   status: 'active' | 'archived';
+  archivedAt?: string;
+  updatedAt?: number;
   layers: StrategyLayer[]; // Structured hierarchy
 }
 

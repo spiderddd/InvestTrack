@@ -38,7 +38,7 @@ export const ExportService = {
     },
 
     async exportStrategies() {
-        const versions = await getQuery("SELECT id, name, description, start_date as startDate, status FROM strategy_versions ORDER BY start_date DESC");
+        const versions = await getQuery("SELECT id, name, description, start_date as startDate, status, archived_at as archivedAt, updated_at as updatedAt FROM strategy_versions ORDER BY start_date DESC");
         const layers = await getQuery("SELECT id, version_id as versionId, name, weight, description FROM strategy_layers ORDER BY sort_order ASC");
         const targets = await getQuery(`
             SELECT t.id, t.layer_id as layerId, t.asset_id as assetId, t.weight, t.color, t.note
@@ -148,8 +148,8 @@ export const ExportService = {
             for (const s of strategies || []) {
                 const versionId = generateId();
                 await runQuery(
-                    "INSERT INTO strategy_versions (id, name, description, start_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                    [versionId, s.name, s.description, s.startDate, s.status, now]
+                    "INSERT INTO strategy_versions (id, name, description, start_date, status, archived_at, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [versionId, s.name, s.description, s.startDate, s.status, s.archivedAt || null, now, now]
                 );
 
                 for (const layer of s.layers || []) {

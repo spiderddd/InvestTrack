@@ -5,7 +5,7 @@ import { runQuery, getQuery, withTransaction } from '../db.js';
 export const StrategyService = {
     getAll: async () => {
         // 1. Fetch flat data
-        const versions = await getQuery("SELECT id, name, description, start_date as startDate, status FROM strategy_versions ORDER BY start_date DESC");
+        const versions = await getQuery("SELECT id, name, description, start_date as startDate, status, archived_at as archivedAt, updated_at as updatedAt FROM strategy_versions ORDER BY start_date DESC");
         const layers = await getQuery("SELECT id, version_id as versionId, name, weight, description FROM strategy_layers ORDER BY sort_order ASC, weight DESC");
         // Optimized: Removed target_name storage, mapping directly from assets table
         const targets = await getQuery(`
@@ -49,8 +49,8 @@ export const StrategyService = {
 
         return await withTransaction(async () => {
             await runQuery(
-                "INSERT INTO strategy_versions (id, name, description, start_date, created_at) VALUES (?, ?, ?, ?, ?)",
-                [versionId, name, description, startDate, now]
+                "INSERT INTO strategy_versions (id, name, description, start_date, updated_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                [versionId, name, description, startDate, now, now]
             );
 
             if (layers && layers.length > 0) {
@@ -85,8 +85,8 @@ export const StrategyService = {
         return await withTransaction(async () => {
             // 1. Update Version Metadata
             await runQuery(
-                "UPDATE strategy_versions SET name=?, description=?, start_date=?, status=? WHERE id=?",
-                [name, description, startDate, status, id]
+                "UPDATE strategy_versions SET name=?, description=?, start_date=?, status=?, archived_at=?, updated_at=? WHERE id=?",
+                [name, description, startDate, status, data.archivedAt || null, now, id]
             );
 
             // 2. Diff Update Logic for Layers
@@ -152,9 +152,10 @@ export const StrategyService = {
     updateVersion: async (id, data) => {
         const { name, description, startDate, status } = data;
 
+        const now = Date.now();
         await runQuery(
-            "UPDATE strategy_versions SET name=?, description=?, start_date=?, status=? WHERE id=?",
-            [name, description, startDate, status, id]
+            "UPDATE strategy_versions SET name=?, description=?, start_date=?, status=?, archived_at=?, updated_at=? WHERE id=?",
+            [name, description, startDate, status, data.archivedAt || null, now, id]
         );
 
         return { success: true, id };

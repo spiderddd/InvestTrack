@@ -200,7 +200,7 @@ export const StorageService = {
             const old = currentList.find(o => o.id === v.id);
             if (old && JSON.stringify(old) !== JSON.stringify(v)) {
                 // Update version metadata
-                if (old.name !== v.name || old.description !== v.description || old.startDate !== v.startDate || old.status !== v.status) {
+                if (old.name !== v.name || old.description !== v.description || old.startDate !== v.startDate || old.status !== v.status || old.archivedAt !== v.archivedAt) {
                     const versionRes = await fetch(`${API_BASE}/strategies/${v.id}/version`, {
                         method: 'PUT',
                         headers: {'Content-Type': 'application/json'},
@@ -208,7 +208,8 @@ export const StorageService = {
                             name: v.name,
                             description: v.description,
                             startDate: v.startDate,
-                            status: v.status
+                            status: v.status,
+                            archivedAt: v.archivedAt
                         })
                     });
                     if (!versionRes.ok) throw new Error(`更新策略版本失败: ${v.name}`);

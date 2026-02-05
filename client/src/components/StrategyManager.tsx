@@ -253,7 +253,7 @@ const StrategyManager: React.FC<StrategyManagerProps> = ({ strategies: versions,
     } else {
         newVersion = StorageService.createDefaultStrategy();
     }
-    const updated = versions.map(v => v.status === 'active' ? { ...v, status: 'archived' as const } : v);
+    const updated = versions.map(v => v.status === 'active' ? { ...v, status: 'archived' as const, archivedAt: new Date().toISOString().slice(0, 10) } : v);
     onUpdate([...updated, newVersion]);
     setActiveVersionId(newVersion.id);
   };
