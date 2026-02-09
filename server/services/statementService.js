@@ -3,17 +3,17 @@ import { v4 as uuidv4 } from 'uuid';
 import { runQuery, getQuery, withTransaction } from '../db.js';
 import { lruCache } from '../utils/cache.js';
 
-export const SnapshotService = {
+export const StatementService = {
     getList: async (page = 1, limit = 20) => {
         const offset = (page - 1) * limit;
 
         const [countResult, rows] = await Promise.all([
-            getQuery("SELECT COUNT(*) as count FROM snapshots"),
+            getQuery("SELECT COUNT(*) as count FROM monthly_statements"),
             getQuery(`
                 SELECT
                     s.id, s.date, s.note,
                     COALESCE(SUM(t.cost_change), 0) as totalInvested
-                FROM snapshots s
+                FROM monthly_statements s
                 LEFT JOIN transactions t ON s.date = t.date
                 GROUP BY s.id, s.date, s.note
                 ORDER BY s.date DESC
@@ -44,15 +44,12 @@ export const SnapshotService = {
         
         let totalValue = 0;
         let totalInvested = 0;
-
-        // Convert YYYY-MM to YYYY-MM-DD (last day of month) for price query
-        const priceDate = date.length === 7 ? `${date}-31` : date;
         
         for (const h of holdings) {
             if (Math.abs(h.quantity) < 0.000001) continue;
             const priceRow = await getQuery(
                 `SELECT price FROM market_prices WHERE asset_id=? AND date<=? ORDER BY date DESC LIMIT 1`,
-                [h.asset_id, priceDate]
+                [h.asset_id, date]
             );
             const price = priceRow.length > 0 ? priceRow[0].price : 0;
             totalValue += (h.quantity * price);
@@ -65,16 +62,16 @@ export const SnapshotService = {
     },
 
     // New: Lightweight list for dropdowns
-    getDatesOnly: async () => {
-        const rows = await getQuery("SELECT date FROM snapshots ORDER BY date DESC");
+    getPeriodsOnly: async () => {
+        const rows = await getQuery("SELECT date FROM monthly_statements ORDER BY date DESC");
         return rows.map(r => r.date);
     },
 
-    // Optimized: Get nearest previous snapshot without fetching full history list
+    // Optimized: Get nearest previous statement without fetching full history list
     getPrevious: async (date) => {
         const sql = `
             SELECT id, date, note
-            FROM snapshots
+            FROM monthly_statements
             WHERE date < ?
             ORDER BY date DESC
             LIMIT 1
@@ -83,7 +80,7 @@ export const SnapshotService = {
         if (rows.length === 0) return null;
         
         // Hydrate with details for the 'copy from previous' feature
-        return await SnapshotService.getDetails(rows[0].id);
+        return await StatementService.getDetails(rows[0].id);
     },
 
     getHistoryGraph: async () => {
@@ -91,7 +88,7 @@ export const SnapshotService = {
         const cached = lruCache.get(cacheKey);
         if (cached) return cached;
 
-        const snapshots = await getQuery("SELECT id, date FROM snapshots ORDER BY date ASC");
+        const statements = await getQuery("SELECT id, date FROM monthly_statements ORDER BY date ASC");
         const allTxs = await getQuery("SELECT asset_id, date, quantity_change, cost_change FROM transactions ORDER BY date ASC");
         const allPrices = await getQuery("SELECT asset_id, date, price FROM market_prices ORDER BY date ASC");
         
@@ -105,10 +102,10 @@ export const SnapshotService = {
         let txCursor = 0;
         const totalTxs = allTxs.length;
 
-        const result = snapshots.map(s => {
-            const snapshotDate = s.date;
+        const result = statements.map(s => {
+            const statementDate = s.date;
             
-            while (txCursor < totalTxs && allTxs[txCursor].date <= snapshotDate) {
+            while (txCursor < totalTxs && allTxs[txCursor].date <= statementDate) {
                 const tx = allTxs[txCursor];
                 if (!runningState.has(tx.asset_id)) {
                     runningState.set(tx.asset_id, { quantity: 0, cost: 0 });
@@ -122,14 +119,12 @@ export const SnapshotService = {
             const assetsWithPrice = [];
             let totalValue = 0;
             let totalInvested = 0;
-            // Convert YYYY-MM to YYYY-MM-DD (last day of month) for price comparison
-            const priceDate = snapshotDate.length === 7 ? `${snapshotDate}-31` : snapshotDate;
             for (const [assetId, state] of runningState.entries()) {
                 if (Math.abs(state.quantity) < 0.000001) continue;
                 const assetPrices = pricesByAsset.get(assetId) || [];
                 let price = 0;
                 for (let i = assetPrices.length - 1; i >= 0; i--) {
-                    if (assetPrices[i].date <= priceDate) {
+                    if (assetPrices[i].date <= statementDate) {
                         price = assetPrices[i].price;
                         break;
                     }
@@ -160,15 +155,15 @@ export const SnapshotService = {
     },
 
     getDetails: async (id) => {
-        const headerRows = await getQuery("SELECT id, date, note FROM snapshots WHERE id = ?", [id]);
-        if (headerRows.length === 0) throw { statusCode: 404, message: "Snapshot not found" };
-        const snapshot = headerRows[0];
-        const snapshotDate = snapshot.date;
+        const headerRows = await getQuery("SELECT id, date, note FROM monthly_statements WHERE id = ?", [id]);
+        if (headerRows.length === 0) throw { statusCode: 404, message: "Statement not found" };
+        const statement = headerRows[0];
+        const statementDate = statement.date;
 
         // Get totals from cache
-        const totals = await SnapshotService.calculateTotals(snapshotDate);
-        snapshot.totalValue = totals.totalValue;
-        snapshot.totalInvested = totals.totalInvested;
+        const totals = await StatementService.calculateTotals(statementDate);
+        statement.totalValue = totals.totalValue;
+        statement.totalInvested = totals.totalInvested;
 
         const holdingsSql = `
             SELECT 
@@ -180,16 +175,13 @@ export const SnapshotService = {
             GROUP BY t.asset_id
             HAVING quantity != 0
         `;
-        const holdings = await getQuery(holdingsSql, [snapshotDate]);
+        const holdings = await getQuery(holdingsSql, [statementDate]);
 
         // Fetch Note as well
-        const flowSql = `SELECT asset_id, quantity_change, cost_change, note FROM transactions WHERE snapshot_id = ?`;
+        const flowSql = `SELECT asset_id, quantity_change, cost_change, note FROM transactions WHERE statement_id = ?`;
         const flows = await getQuery(flowSql, [id]);
         const flowMap = new Map();
         flows.forEach(f => flowMap.set(f.asset_id, { q: f.quantity_change, c: f.cost_change, n: f.note }));
-
-        // Convert YYYY-MM to YYYY-MM-DD (last day of month) for price query
-        const priceDate = snapshotDate.length === 7 ? `${snapshotDate}-31` : snapshotDate;
         
         const fullAssets = await Promise.all(holdings.map(async (h) => {
             const assetInfo = await getQuery("SELECT name, type FROM assets WHERE id = ?", [h.assetId]);
@@ -199,7 +191,7 @@ export const SnapshotService = {
                 SELECT price FROM market_prices 
                 WHERE asset_id = ? AND date <= ? 
                 ORDER BY date DESC LIMIT 1
-            `, [h.assetId, priceDate]);
+            `, [h.assetId, statementDate]);
 
             let unitPrice = priceRow.length > 0 ? priceRow[0].price : 0;
             if (unitPrice === 0 && (meta.type === 'fixed' || meta.type === 'wealth')) {
@@ -223,42 +215,41 @@ export const SnapshotService = {
             };
         }));
 
-        snapshot.assets = fullAssets;
-        return snapshot;
+        statement.assets = fullAssets;
+        return statement;
     },
 
     // New helper for asset manager time travel (supports YYYY-MM or YYYY-MM-DD)
-    getDetailsByDate: async (date) => {
+    getDetailsByPeriod: async (date) => {
         if (!date) throw { statusCode: 400, message: "Date required" };
         
         const isFullDate = date.length === 10;
-        let snapshotDate = date;
-        let priceDate = date;
+        let statementDate = date;
         
         if (isFullDate) {
-            // For YYYY-MM-DD, find the latest snapshot <= this date (compare YYYY-MM parts)
+            // For YYYY-MM-DD, find the latest statement <= this date (compare YYYY-MM parts)
             const monthPart = date.slice(0, 7);  // YYYY-MM
-            const snapshotRows = await getQuery(
-                "SELECT id, date FROM snapshots WHERE date <= ? ORDER BY date DESC LIMIT 1",
+            const statementRows = await getQuery(
+                "SELECT id, date FROM monthly_statements WHERE date <= ? ORDER BY date DESC LIMIT 1",
                 [monthPart]
             );
-            if (snapshotRows.length === 0) {
-                console.log(`[SnapshotService] No snapshot found <= ${monthPart}`);
+            if (statementRows.length === 0) {
+                console.log(`[StatementService] No statement found <= ${monthPart}`);
                 return null;
             }
-            snapshotDate = snapshotRows[0].date;
-            console.log(`[SnapshotService] Real-time view: date=${date}, using snapshot=${snapshotDate}`);
+            statementDate = statementRows[0].date;
+            console.log(`[StatementService] Real-time view: date=${date}, using statement=${statementDate}`);
         }
         
-        // Get the snapshot header
-        const headerRows = await getQuery("SELECT id, date, note FROM snapshots WHERE date = ?", [snapshotDate]);
+        // Get the statement header
+        const headerRows = await getQuery("SELECT id, date, note FROM monthly_statements WHERE date = ?", [statementDate]);
         if (headerRows.length === 0) {
-            console.log(`[SnapshotService] Snapshot not found: ${snapshotDate}`);
+            console.log(`[StatementService] Statement not found: ${statementDate}`);
             return null;
         }
         
-        const snapshot = headerRows[0];
-        const snapshotId = snapshot.id;
+        const statement = headerRows[0];
+        const statementId = statement.id;
         
         // Calculate holdings up to the target date
         const holdingsSql = `
@@ -271,14 +262,14 @@ export const SnapshotService = {
             GROUP BY t.asset_id
             HAVING ABS(quantity) > 0.000001
         `;
-        const holdings = await getQuery(holdingsSql, [priceDate]);
-        console.log(`[SnapshotService] Holdings count for ${priceDate}: ${holdings.length}`);
+        const holdings = await getQuery(holdingsSql, [date]);
+        console.log(`[StatementService] Holdings count for ${date}: ${holdings.length}`);
 
-        // Get snapshot-specific transactions for note/flow tracking (only for month view)
+        // Get statement-specific transactions for note/flow tracking (only for month view)
         let flowMap = new Map();
         if (!isFullDate) {
-            const flowSql = `SELECT asset_id, quantity_change, cost_change, note FROM transactions WHERE snapshot_id = ?`;
-            const flows = await getQuery(flowSql, [snapshotId]);
+            const flowSql = `SELECT asset_id, quantity_change, cost_change, note FROM transactions WHERE statement_id = ?`;
+            const flows = await getQuery(flowSql, [statementId]);
             flows.forEach(f => flowMap.set(f.asset_id, { q: f.quantity_change, c: f.cost_change, n: f.note }));
         }
 
@@ -291,7 +282,7 @@ export const SnapshotService = {
                 SELECT price FROM market_prices 
                 WHERE asset_id = ? AND date <= ? 
                 ORDER BY date DESC LIMIT 1
-            `, [h.assetId, priceDate]);
+            `, [h.assetId, date]);
 
             let unitPrice = priceRow.length > 0 ? priceRow[0].price : 0;
             if (unitPrice === 0 && (meta.type === 'fixed' || meta.type === 'wealth')) {
@@ -321,29 +312,29 @@ export const SnapshotService = {
         const totalInvested = fullAssets.reduce((sum, a) => sum + a.totalCost, 0);
 
         return {
-            id: snapshotId,
-            date: isFullDate ? priceDate : snapshotDate,
-            note: snapshot.note,
+            id: statementId,
+            date: date,
+            note: statement.note,
             totalValue,
             totalInvested,
-            assets: fullAssets
+            positions: fullAssets
         };
     },
 
-    // Treat 'snapshots' table as a Write-Through Cache
+    // Treat 'monthly_statements' table as a Write-Through Cache
     createOrUpdate: async (data) => {
         const { date, assets, note } = data;
         
         if (!date || !Array.isArray(assets)) {
-            throw { statusCode: 400, message: "Invalid snapshot data format" };
+            throw { statusCode: 400, message: "Invalid statement data format" };
         }
 
         return await withTransaction(async () => {
             const now = Date.now();
-            const snapRows = await getQuery("SELECT id FROM snapshots WHERE date = ?", [date]);
-            const snapshotId = snapRows.length > 0 ? snapRows[0].id : uuidv4();
+            const stmtRows = await getQuery("SELECT id FROM monthly_statements WHERE date = ?", [date]);
+            const statementId = stmtRows.length > 0 ? stmtRows[0].id : uuidv4();
 
-            await runQuery("DELETE FROM transactions WHERE snapshot_id = ?", [snapshotId]);
+            await runQuery("DELETE FROM transactions WHERE statement_id = ?", [statementId]);
             
             for (const asset of assets) {
                 if (asset.unitPrice !== undefined && asset.unitPrice !== null) {
@@ -360,25 +351,25 @@ export const SnapshotService = {
                 
                 if (Math.abs(qChange) > 0 || Math.abs(cChange) > 0 || txNote.length > 0) {
                      await runQuery(`
-                        INSERT INTO transactions (id, asset_id, snapshot_id, date, type, quantity_change, cost_change, note, created_at)
+                        INSERT INTO transactions (id, asset_id, statement_id, date, type, quantity_change, cost_change, note, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                     `, [uuidv4(), asset.assetId, snapshotId, date, 'adjustment', qChange, cChange, txNote, now]);
+                     `, [uuidv4(), asset.assetId, statementId, date, 'adjustment', qChange, cChange, txNote, now]);
                 }
             }
 
-            if (snapRows.length > 0) {
-                await runQuery("UPDATE snapshots SET note=?, updated_at=? WHERE id=?", 
-                    [note, now, snapshotId]);
+            if (stmtRows.length > 0) {
+                await runQuery("UPDATE monthly_statements SET note=?, updated_at=? WHERE id=?", 
+                    [note, now, statementId]);
             } else {
-                await runQuery("INSERT INTO snapshots (id, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                    [snapshotId, date, note, now, now]);
+                await runQuery("INSERT INTO monthly_statements (id, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                    [statementId, date, note, now, now]);
             }
 
             // Clear cache for this date
             lruCache.delete(`totals:${date}`);
             lruCache.delete('historyGraph');
 
-            return { success: true, id: snapshotId };
+            return { success: true, id: statementId };
         });
     },
 

@@ -2,15 +2,15 @@ import React, { useState } from 'react';
 import { LayoutDashboard, PieChart, History, Wallet, Wifi, Briefcase, BookOpen } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import StrategyManager from './components/StrategyManager';
-import SnapshotManager from './components/SnapshotManager';
+import StatementManager from './components/StatementManager';
 import { AssetManager } from './components/AssetManager';
 import { ProjectGuide } from './components/ProjectGuide';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { StorageService } from './services/storageService';
-import { StrategyVersion, SnapshotItem, Asset } from '@shared/types';
+import { StrategyVersion, MonthlyStatementDetail, Asset } from '@shared/types';
 import { DataProvider, useData } from './contexts/DataContext';
 
-type View = 'dashboard' | 'strategy' | 'snapshots' | 'assets';
+type View = 'dashboard' | 'strategy' | 'statements' | 'assets';
 
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('dashboard');
@@ -21,13 +21,13 @@ const AppContent: React.FC = () => {
   const {
     assets,
     strategies,
-    snapshots,
+    monthlyStatements,
     isLoading,
     error,
     refreshAll,
     refreshAssets,
     refreshStrategies,
-    refreshSnapshots
+    refreshMonthlyStatements
   } = useData();
 
   // 错误处理辅助函数
@@ -44,7 +44,7 @@ const AppContent: React.FC = () => {
           setActionError(null);
           // Logic moved to Service to keep UI Component clean
           await StorageService.syncStrategies(strategies, newVersions);
-          // Only refresh strategies, assets and snapshots remain cached
+          // Only refresh strategies, assets and monthlyStatements remain cached
           await refreshStrategies();
       } catch (err) {
           handleError(err, '保存策略失败');
@@ -52,23 +52,23 @@ const AppContent: React.FC = () => {
       }
   };
 
-  const handleUpdateSnapshots = async (_newSnapshots: SnapshotItem[]) => {
+  const handleUpdateMonthlyStatements = async (_newMonthlyStatements: MonthlyStatementDetail[]) => {
      try {
          setActionError(null);
-         // This callback is usually triggered by bulk updates, currently we mostly use handleSaveSnapshot
-         await refreshSnapshots();
+         // This callback is usually triggered by bulk updates, currently we mostly use handleSaveMonthlyStatement
+         await refreshMonthlyStatements();
      } catch (err) {
-         handleError(err, '更新快照列表失败');
+         handleError(err, '更新月度账单列表失败');
      }
   };
 
-  const handleSaveSnapshot = async (s: SnapshotItem) => {
+  const handleSaveMonthlyStatement = async (s: MonthlyStatementDetail) => {
     try {
         setActionError(null);
-        await StorageService.saveSnapshotSingle(s);
-        await refreshSnapshots();
+        await StorageService.saveMonthlyStatement(s);
+        await refreshMonthlyStatements();
     } catch (err) {
-        handleError(err, '保存快照失败');
+        handleError(err, '保存月度账单失败');
         throw err;
     }
   };
@@ -90,8 +90,8 @@ const AppContent: React.FC = () => {
         const success = await StorageService.updateAsset(id, a);
         if (success) {
             await refreshAssets();
-            // Snapshots might contain asset names, so we refresh them too to ensure consistency
-            await refreshSnapshots();
+            // MonthlyStatements might contain asset names, so we refresh them too to ensure consistency
+            await refreshMonthlyStatements();
         } else {
             throw new Error('更新资产失败');
         }
@@ -123,7 +123,7 @@ const AppContent: React.FC = () => {
       case 'dashboard': return '仪表盘';
       case 'assets': return '资产库';
       case 'strategy': return '策略';
-      case 'snapshots': return '记账';
+      case 'statements': return '记账';
     }
   };
 
@@ -176,7 +176,7 @@ const AppContent: React.FC = () => {
           
           <div className="flex items-center gap-4">
             <nav className="flex gap-1">
-              {(['dashboard', 'assets', 'strategy', 'snapshots'] as View[]).map((view) => (
+              {(['dashboard', 'assets', 'strategy', 'statements'] as View[]).map((view) => (
                 <button
                   key={view}
                   onClick={() => setActiveView(view)}
@@ -218,12 +218,12 @@ const AppContent: React.FC = () => {
       {/* Main Content */}
       <main className="max-w-[1600px] mx-auto px-4 md:px-6 py-6 md:py-10">
         {activeView === 'dashboard' && (
-          <Dashboard strategies={strategies} snapshots={snapshots} />
+          <Dashboard strategies={strategies} monthlyStatements={monthlyStatements} />
         )}
         {activeView === 'assets' && (
           <AssetManager 
             assets={assets}
-            snapshots={snapshots}
+            monthlyStatements={monthlyStatements}
             strategies={strategies}
             onUpdate={refreshAssets}
             onCreate={handleCreateAsset}
@@ -238,13 +238,13 @@ const AppContent: React.FC = () => {
             onUpdate={handleUpdateStrategies} 
           />
         )}
-        {activeView === 'snapshots' && (
-          <SnapshotManager 
-            snapshots={snapshots} 
+        {activeView === 'statements' && (
+          <StatementManager 
+            monthlyStatements={monthlyStatements} 
             strategies={strategies} 
             assets={assets}
-            onUpdate={handleUpdateSnapshots} 
-            onSave={handleSaveSnapshot}
+            onUpdate={handleUpdateMonthlyStatements as any} 
+            onSave={handleSaveMonthlyStatement as any}
             onCreateAsset={handleCreateAsset}
           />
         )}
@@ -255,7 +255,7 @@ const AppContent: React.FC = () => {
         <button onClick={() => setActiveView('dashboard')} className={`p-4 ${activeView === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}><LayoutDashboard/></button>
         <button onClick={() => setActiveView('assets')} className={`p-4 ${activeView === 'assets' ? 'text-blue-600' : 'text-slate-400'}`}><Briefcase/></button>
         <button onClick={() => setActiveView('strategy')} className={`p-4 ${activeView === 'strategy' ? 'text-blue-600' : 'text-slate-400'}`}><PieChart/></button>
-        <button onClick={() => setActiveView('snapshots')} className={`p-4 ${activeView === 'snapshots' ? 'text-blue-600' : 'text-slate-400'}`}><History/></button>
+        <button onClick={() => setActiveView('statements')} className={`p-4 ${activeView === 'statements' ? 'text-blue-600' : 'text-slate-400'}`}><History/></button>
       </nav>
       
       <div className="h-20 md:hidden"></div>

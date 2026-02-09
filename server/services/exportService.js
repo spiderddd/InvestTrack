@@ -6,10 +6,10 @@ const generateId = () => uuidv4();
 
 export const ExportService = {
     async exportForBackup() {
-        const [assets, strategies, snapshots] = await Promise.all([
+        const [assets, strategies, statements] = await Promise.all([
             this.exportAssets(),
             this.exportStrategies(),
-            this.exportSnapshots()
+            this.exportStatements()
         ]);
 
         return {
@@ -20,7 +20,7 @@ export const ExportService = {
             },
             assets,
             strategies,
-            snapshots
+            monthlyStatements: statements
         };
     },
 
@@ -71,15 +71,15 @@ export const ExportService = {
         }));
     },
 
-    async exportSnapshots() {
-        const snapshots = await getQuery("SELECT date, note FROM snapshots ORDER BY date DESC");
+    async exportStatements() {
+        const statements = await getQuery("SELECT date, note FROM monthly_statements ORDER BY date DESC");
 
         const assetIdToName = new Map();
         const assets = await getQuery("SELECT id, name FROM assets");
         assets.forEach(a => assetIdToName.set(a.id, a.name));
 
         const dateToTransactions = new Map();
-        const allDates = snapshots.map(s => s.date);
+        const allDates = statements.map(s => s.date);
         if (allDates.length > 0) {
             const placeholders = allDates.map(() => '?').join(',');
             const transactions = await getQuery(`
@@ -105,11 +105,11 @@ export const ExportService = {
             }
         }
 
-        for (const snapshot of snapshots) {
-            snapshot.transactions = dateToTransactions.get(snapshot.date) || [];
+        for (const statement of monthly_statements) {
+            statement.transactions = dateToTransactions.get(statement.date) || [];
         }
 
-        return snapshots;
+        return monthly_statements;
     },
 
     async importBackup(data) {
@@ -117,13 +117,13 @@ export const ExportService = {
             throw { statusCode: 400, message: "Invalid backup file format" };
         }
 
-        const { assets, strategies, snapshots } = data;
+        const { assets, strategies, monthlyStatements } = data;
         const isNewFormat = data._meta.version === "2.0";
 
         const result = await withTransaction(async () => {
             const nameToId = new Map();
             const oldIdToNewId = new Map();
-            const dateToSnapshotId = new Map();
+            const dateToStatementId = new Map();
             const now = Date.now();
 
             for (const a of assets || []) {
@@ -171,30 +171,30 @@ export const ExportService = {
                 }
             }
 
-            const snapshotData = isNewFormat ? snapshots : (snapshots?.snapshots || snapshots || []);
-            for (const snap of snapshotData) {
-                const snapId = generateId();
-                dateToSnapshotId.set(snap.date, snapId);
+            const statementData = isNewFormat ? monthlyStatements : (monthlyStatements?.monthlyStatements || monthlyStatements || []);
+            for (const stmt of statementData) {
+                const stmtId = generateId();
+                dateToStatementId.set(stmt.date, stmtId);
                 await runQuery(
-                    "INSERT INTO snapshots (id, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                    [snapId, snap.date, snap.note || '', now, now]
+                    "INSERT INTO monthly_statements (id, date, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                    [stmtId, stmt.date, stmt.note || '', now, now]
                 );
 
-                if (isNewFormat && snap.transactions?.length > 0) {
-                    for (const tx of snap.transactions) {
+                if (isNewFormat && stmt.transactions?.length > 0) {
+                    for (const tx of stmt.transactions) {
                         const assetId = nameToId.get(tx.assetName);
                         if (assetId) {
                             await runQuery(`
-                                INSERT INTO transactions (id, asset_id, snapshot_id, date, type, quantity_change, cost_change, note, created_at)
+                                INSERT INTO transactions (id, asset_id, statement_id, date, type, quantity_change, cost_change, note, created_at)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            `, [generateId(), assetId, snapId, tx.date || snap.date, tx.type, tx.quantityChange || 0, tx.costChange || 0, tx.note || '', now]);
+                            `, [generateId(), assetId, stmtId, tx.date || stmt.date, tx.type, tx.quantityChange || 0, tx.costChange || 0, tx.note || '', now]);
                         }
                     }
                 }
             }
 
             if (!isNewFormat) {
-                const prices = snapshots?.prices || [];
+                const prices = monthlyStatements?.prices || [];
                 for (const p of prices) {
                     await runQuery(`
                         INSERT INTO market_prices (id, asset_id, date, price, source, updated_at)
@@ -203,20 +203,20 @@ export const ExportService = {
                     `, [generateId(), p.assetId, p.date, p.price, 'import', now]);
                 }
 
-                const transactions = snapshots?.transactions || [];
+                const transactions = monthlyStatements?.transactions || [];
                 for (const tx of transactions) {
-                    const snapshotId = tx.snapshotId || dateToSnapshotId.get(tx.date);
+                    const statementId = tx.statementId || dateToStatementId.get(tx.date);
                     await runQuery(`
-                        INSERT INTO transactions (id, asset_id, snapshot_id, date, type, quantity_change, cost_change, note, created_at)
+                        INSERT INTO transactions (id, asset_id, statement_id, date, type, quantity_change, cost_change, note, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `, [generateId(), tx.assetId, snapshotId, tx.date, tx.type, tx.quantityChange || 0, tx.costChange || 0, tx.note || '', now]);
+                    `, [generateId(), tx.assetId, statementId, tx.date, tx.type, tx.quantityChange || 0, tx.costChange || 0, tx.note || '', now]);
                 }
             }
 
             return {
                 assets: assets?.length || 0,
                 strategies: strategies?.length || 0,
-                snapshots: snapshotData.length
+                monthlyStatements: statementData.length
             };
         });
 

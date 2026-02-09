@@ -8,9 +8,9 @@
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white" alt="Docker">
 </p>
 
-**InvestTrack** 是一个基于"策略驱动"和"月度快照"方法论的个人资产管理工具。
+**InvestTrack** 是一个基于"策略驱动"和"月度调整"方法论的个人资产管理工具。
 
-与传统的记账软件不同，它不关注每一笔琐碎的交易流水，而是关注**每个月月底的资产状态**以及**实际持仓与目标策略的偏差**。
+与传统的记账软件不同，它不关注每一笔琐碎的交易流水，而是关注**每个月的持仓变动汇总**（净买入/卖出）以及**实际持仓与目标策略的偏差**。
 
 专为部署在家庭 NAS（群晖、威联通等）或个人服务器设计，数据完全本地存储于 SQLite，安全可控，隐私无忧。
 
@@ -33,9 +33,9 @@
 - **分组视图**: 按"资产类别"或"策略层级"分组查看
 - **时光机模式**: 回溯查看历史上任意月份的持仓详情
 
-### 📸 月度快照 (Snapshots)
-- **核心逻辑**: 每月只需记录一次资产状态，告别繁琐的逐笔记账
-- **统一流水制**: 无论是买卖股票还是存取款，均通过"变动量"和"净投入"记录，准确计算成本
+### 📸 月度调整 (Monthly Statements)
+- **核心逻辑**: 每月只需记录一次持仓变动汇总（净变动），告别繁琐的逐笔记账
+- **统一流水制**: 无论是买卖股票还是存取款，均记录"净变动量"和"净成本变动"，系统会自动累加计算当前持仓
 - **投资笔记**: 支持 Markdown 格式记录每月投资复盘与思考
 
 ---
@@ -85,13 +85,23 @@ npm run dev
 
 ## 📖 核心设计理念
 
-### 月度快照 (Monthly Snapshot)
+### 月度调整 (Monthly Statement)
 
-InvestTrack 采用**月度快照**方法论，核心思想是：
+InvestTrack 采用**月度调整**方法论，核心思想是：
 
-> **只需记录每个月底的资产状态**，而非每一笔交易。
+> **只需记录每个月的持仓净变动**，而非每一笔交易或月末余额。
 
-- **省时**: 每月花费 5-10 分钟记录，而非每天记账
+**示例：**
+```
+某股票在 2024-01 月：
+- 月初已有：1000 股（由之前月份的记录累加得出）
+- 本月净变动：买入 100 股，卖出 30 股 → 记录 +70 股
+- 本月净成本变动：投入 1000 元，收回 360 元 → 记录 +640 元
+
+系统计算当前持仓 = 所有历史净变动累加
+```
+
+- **省时**: 每月花费 5-10 分钟记录净变动，而非每天记账
 - **清晰**: 关注资产分布和策略偏离，而非琐碎流水
 - **复盘**: 每月的投资笔记帮助回顾决策质量
 
@@ -118,7 +128,7 @@ InvestTrack/
 │   ├── src/
 │   │   ├── components/        # React 组件
 │   │   │   ├── dashboard/     # 仪表盘相关
-│   │   │   └── snapshots/     # 记账相关
+│   │   │   └── statements/    # 月度账单相关
 │   │   ├── contexts/          # React Context
 │   │   ├── hooks/             # 自定义 Hooks
 │   │   ├── services/          # API 调用封装
@@ -180,10 +190,10 @@ curl http://localhost:3001/api/export/backup > backup_$(date +%Y-%m-%d).json
   "_meta": { "version": "1.0", "exportedAt": "...", "type": "invest_track_backup" },
   "assets": [{ "type", "name", "ticker", "note" }],
   "strategies": [{ "name", "description", "startDate", "status", "layers": [{ "name", "weight", "description", "items": [{ "assetId", "targetName", "weight", "color", "note" }] }] }],
-  "snapshots": {
-    "snapshots": [{ "date", "note" }],
+  "statements": {
+    "statements": [{ "period", "note" }],
     "prices": [{ "assetId", "date", "price" }],
-    "transactions": [{ "assetId", "date", "type", "quantityChange", "costChange", "note" }]
+    "entries": [{ "assetId", "period", "quantityAdjustment", "costAdjustment", "note" }]
   }
 }
 ```
@@ -200,7 +210,7 @@ node scripts/seed_data.js backup_2024-06-01.json
 **支持两种模式：**
 | 模式 | 命令 | 说明 |
 | :--- | :--- | :--- |
-| **模拟数据** | `node scripts/seed_data.js` | 使用内置的7资产+6月账本数据 |
+| **模拟数据** | `node scripts/seed_data.js` | 使用内置的7资产+6月对账数据 |
 | **备份恢复** | `node scripts/seed_data.js xxx.json` | 从指定JSON文件导入数据 |
 
 ### 数据库手动备份

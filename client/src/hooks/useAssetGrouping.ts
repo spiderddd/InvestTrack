@@ -1,6 +1,6 @@
 
 import { useState, useMemo, useEffect } from 'react';
-import { Asset, SnapshotItem, StrategyVersion, AssetCategory, AssetRecord, StrategyLayer, StrategyTarget } from '@shared/types';
+import { Asset, MonthlyStatement, MonthlyStatementDetail, StrategyVersion, AssetCategory, Position, StrategyLayer, StrategyTarget } from '@shared/types';
 import { Layers, HelpCircle, TrendingUp, Briefcase, Landmark, Coins, Wallet } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
@@ -25,61 +25,61 @@ interface AssetPerformance {
   isHistorical: boolean;
 }
 
-export const useAssetGrouping = (assets: Asset[], propsSnapshots: SnapshotItem[], strategies: StrategyVersion[]) => {
+export const useAssetGrouping = (assets: Asset[], propsStatements: MonthlyStatement[], strategies: StrategyVersion[]) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showHeldOnly, setShowHeldOnly] = useState(false);
   const [groupBy, setGroupBy] = useState<'category' | 'layer'>('category');
   const [selectedDate, setSelectedDate] = useState<string>('latest');
-  
+
   // States to hold server-fetched data
   const [availableDates, setAvailableDates] = useState<string[]>([]);
-  const [viewSnapshot, setViewSnapshot] = useState<SnapshotItem | null>(null);
+  const [viewStatement, setViewStatement] = useState<MonthlyStatementDetail | null>(null);
 
   // 1. Fetch available dates (Lightweight)
   useEffect(() => {
-    StorageService.getSnapshotDates().then(dates => setAvailableDates(dates));
+    StorageService.getMonthlyStatementDates().then(dates => setAvailableDates(dates));
   }, []);
 
-  // 2. Fetch snapshot details when date changes (On-Demand Calculation)
+  // 2. Fetch statement details when date changes (On-Demand Calculation)
   useEffect(() => {
-    const fetchSnapshot = async () => {
+    const fetchStatement = async () => {
       let targetDate = selectedDate;
-      
+
       if (selectedDate === 'latest') {
         // Use today's date for real-time portfolio view with latest prices
         targetDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
       }
-      
-      const details = await StorageService.getSnapshotByDate(targetDate);
-      setViewSnapshot(details);
+
+      const details = await StorageService.getMonthlyStatementByDate(targetDate);
+      setViewStatement(details);
     };
-    fetchSnapshot();
-  }, [selectedDate, propsSnapshots]);
+    fetchStatement();
+  }, [selectedDate, propsStatements]);
 
   const activeStrategy = useMemo(() => {
       return strategies.find(s => s.status === 'active') || strategies[strategies.length - 1];
   }, [strategies]);
 
-  // Optimized: Map directly from the fetched single snapshot, no more client-side history traversal
+  // Optimized: Map directly from the fetched single statement, no more client-side history traversal
   const assetPerformanceMap = useMemo(() => {
     const map = new Map<string, AssetPerformance>();
-    
-    if (viewSnapshot && viewSnapshot.assets) {
-        viewSnapshot.assets.forEach((a: AssetRecord) => {
+
+    if (viewStatement && viewStatement.positions) {
+        viewStatement.positions.forEach((a: Position) => {
             if (a.quantity !== 0) { // Keep even if very small? Usually > 0 or < 0
                  map.set(a.assetId, {
                     quantity: a.quantity,
                     marketValue: a.marketValue,
                     totalCost: a.totalCost,
                     unitPrice: a.unitPrice,
-                    date: viewSnapshot.date,
+                     date: viewStatement.date,
                     isHistorical: selectedDate !== 'latest'
                 });
             }
         });
     }
     return map;
-  }, [viewSnapshot, selectedDate]);
+  }, [viewStatement, selectedDate]);
 
   const displaySections = useMemo(() => {
     let sections: any[] = [];

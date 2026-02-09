@@ -1,5 +1,5 @@
 
-import { StrategyVersion, SnapshotItem, Asset } from '@shared/types';
+import { StrategyVersion, MonthlyStatement, Asset, MonthlyStatementDetail } from '@shared/types';
 
 const API_BASE = '/api';
 
@@ -267,63 +267,63 @@ export const StorageService = {
       return res.json();
   },
 
-  // --- Snapshots ---
+  // --- Monthly Statements ---
   
   // Gets Lightweight List (For List View) - Paginated
-  getSnapshots: async (page: number = 1, limit: number = 20): Promise<{ items: SnapshotItem[], total: number }> => {
+  getMonthlyStatements: async (page: number = 1, limit: number = 20): Promise<{ items: MonthlyStatement[], total: number }> => {
     try {
-      const res = await fetch(`${API_BASE}/snapshots?page=${page}&limit=${limit}`);
-      if (!res.ok) throw new Error('Failed to fetch snapshots');
+      const res = await fetch(`${API_BASE}/statements?page=${page}&limit=${limit}`);
+      if (!res.ok) throw new Error('Failed to fetch statements');
       const data = await res.json();
       return data.data || { items: [], total: 0 };
     } catch (e) { console.error(e); return { items: [], total: 0 }; }
   },
 
   // Gets Lightweight Assets History (For Charting)
-  getSnapshotsHistory: async (): Promise<SnapshotItem[]> => {
+  getMonthlyStatementsHistory: async (): Promise<MonthlyStatement[]> => {
     try {
-      const res = await fetch(`${API_BASE}/snapshots/history`);
-      if (!res.ok) throw new Error('Failed to fetch snapshots history');
+      const res = await fetch(`${API_BASE}/statements/history`);
+      if (!res.ok) throw new Error('Failed to fetch statements history');
       const data = await res.json();
       return data.data || [];
     } catch (e) { console.error(e); return []; }
   },
 
   // New: Lightweight Date List (For Dropdowns)
-  getSnapshotDates: async (): Promise<string[]> => {
+  getMonthlyStatementDates: async (): Promise<string[]> => {
     try {
-        const res = await fetch(`${API_BASE}/snapshots/dates`);
-        if (!res.ok) throw new Error('Failed to fetch snapshot dates');
+        const res = await fetch(`${API_BASE}/statements/dates`);
+        if (!res.ok) throw new Error('Failed to fetch statement dates');
         const data = await res.json();
         return data.data || [];
     } catch (e) { console.error(e); return []; }
   },
 
   // New: Get Details by Date (For Asset Manager "Time Travel")
-  getSnapshotByDate: async (date: string): Promise<SnapshotItem | null> => {
+  getMonthlyStatementByDate: async (date: string): Promise<MonthlyStatementDetail | null> => {
       try {
-          const res = await fetch(`${API_BASE}/snapshots/details-by-date?date=${date}`);
-          if (!res.ok) throw new Error('Failed to fetch snapshot details by date');
+          const res = await fetch(`${API_BASE}/statements/details-by-date?date=${date}`);
+          if (!res.ok) throw new Error('Failed to fetch statement details by date');
           const data = await res.json();
           return data.data || null;
       } catch (e) { console.error(e); return null; }
   },
 
   // Gets Full Details (For Single View)
-  getSnapshot: async (id: string): Promise<SnapshotItem | null> => {
+  getMonthlyStatement: async (id: string): Promise<MonthlyStatementDetail | null> => {
     try {
-        const res = await fetch(`${API_BASE}/snapshots/${id}`);
-        if (!res.ok) throw new Error('Failed to fetch snapshot details');
+        const res = await fetch(`${API_BASE}/statements/${id}`);
+        if (!res.ok) throw new Error('Failed to fetch statement details');
         const data = await res.json();
         return data.data || null;
     } catch (e) { console.error(e); return null; }
   },
 
-  saveSnapshotSingle: async (snapshot: SnapshotItem) => {
-    await fetch(`${API_BASE}/snapshots`, {
+  saveMonthlyStatement: async (statement: MonthlyStatementDetail) => {
+    await fetch(`${API_BASE}/statements`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(snapshot)
+      body: JSON.stringify(statement)
     });
   },
 

@@ -31,7 +31,7 @@ docker run -p 3001:3001 invest-track  # Run container
 - **Line endings**: LF (Unix-style)
 
 ### Naming Conventions
-- **Components**: PascalCase (e.g., `Dashboard.tsx`, `SnapshotManager`)
+- **Components**: PascalCase (e.g., `Dashboard.tsx`, `StatementManager`)
 - **Types/Interfaces**: PascalCase (e.g., `Asset`, `StrategyVersion`)
 - **Functions/Variables**: camelCase (e.g., `handleUpdateStrategies`, `isLoading`)
 - **Constants**: UPPER_SNAKE_CASE for config constants, camelCase for others
@@ -94,7 +94,7 @@ router.post('/', validateBody(AssetSchema), async (req, res) => {
 **Available Schemas** (`server/validations/schemas.js`):
 - `AssetSchema` / `AssetUpdateSchema`
 - `StrategyVersionSchema` / `StrategyVersionCreateSchema`
-- `SnapshotSchema`
+- `MonthlyStatementSchema`
 - `PriceUpdateSchema`
 - `PaginationSchema`
 - `DashboardQuerySchema`
@@ -155,10 +155,10 @@ router.post('/', validateBody(AssetSchema), async (req, res) => { ... });
 ```typescript
 interface DashboardProps {
   strategies: StrategyVersion[];
-  snapshots: SnapshotItem[];
+  statements: MonthlyStatement[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ strategies, snapshots }) => {
+const Dashboard: React.FC<DashboardProps> = ({ strategies, statements }) => {
   // Component logic
 };
 ```
@@ -218,13 +218,13 @@ const MyComponent: React.FC = () => {
 
 ## Important Distinctions
 
-### Asset vs AssetRecord
+### Asset vs Position
 - **Asset**: Asset definition (stock/fund metadata - name, ticker, type)
-- **AssetRecord**: Holding record at a specific point in time (quantity, price, cost)
+- **Position**: Holding record at a specific point in time (quantity, price, cost) - formerly AssetRecord
 
 ### Date Formats
 - **Strategy date**: `YYYY-MM-DD`
-- **Snapshot date**: `YYYY-MM`
+- **Statement period**: `YYYY-MM` (monthly statement period)
 
 ### File Locations
 - Shared types: `shared/types.ts`
@@ -236,6 +236,21 @@ const MyComponent: React.FC = () => {
 - Frontend components: `client/src/components/**/*.tsx`
 - Frontend hooks: `client/src/hooks/*.ts`
 - API services: `client/src/services/storageService.ts`
+
+## Important Concepts
+
+### Monthly Statement (formerly Snapshot)
+The system uses **Monthly Statements** to record investment adjustments:
+- Each statement records **monthly net adjustments** (quantity and cost changes) for the current period only
+- It does NOT record the full holding state at month-end
+- Previous holdings are tracked by accumulating all historical adjustments up to the query date
+- **Key implication**: To know current holdings, the system sums all adjustments from all statements up to the target date
+
+### Position (formerly AssetRecord)
+A Position represents a holding at a specific point in time:
+- `quantity`: Current holdings
+- `totalCost`: Accumulated cost (can be negative for realized gains)
+- `marketValue`: Current market value (quantity × current price)
 
 ## Database
 - SQLite database at `data/invest_track_v2.db`

@@ -45,8 +45,10 @@ export interface StrategyVersion {
   layers: StrategyLayer[]; // Structured hierarchy
 }
 
-// Ledger / Snapshot Records
-export interface AssetRecord {
+// --- Ledger / Monthly Statement Records ---
+
+// Position (formerly AssetRecord) - Real-time calculated view of holdings
+export interface Position {
   id: string; // Unique Position ID
   assetId: string; // Link to Asset
   
@@ -62,7 +64,7 @@ export interface AssetRecord {
   // History
   totalCost: number;
   
-  // Flow
+  // Flow (monthly changes)
   addedPrincipal: number;
   addedQuantity: number;
   
@@ -70,17 +72,33 @@ export interface AssetRecord {
   note?: string; 
 }
 
-export interface SnapshotItem {
-  id: string;
-  date: string; // YYYY-MM
-  assets?: AssetRecord[]; // Optional: List views only need summaries
-  totalInvested: number;
+// StatementEntry - Stored in database, represents monthly net adjustment for one asset
+export interface StatementEntry {
+  assetId: string;
+  statementId: string;
+  quantityAdjustment: number; // Monthly net change (+buy/-sell)
+  costAdjustment: number;     // Monthly net cost change (+invest/-withdraw)
   note?: string;
+}
+
+// MonthlyStatement - Header record for monthly adjustments
+export interface MonthlyStatement {
+  id: string;
+  date: string; // YYYY-MM-DD (end of month), e.g., "2024-01-31"
+  note?: string;  // Monthly investment review
+  // Note: entries are calculated by summing all historical entries up to this date
+}
+
+// Extended MonthlyStatement with calculated positions (for API responses)
+export interface MonthlyStatementDetail extends MonthlyStatement {
+  positions?: Position[]; // Calculated positions at this period
+  totalValue: number;
+  totalInvested: number;
 }
 
 // App Data Container
 export interface AppData {
   assets: Asset[]; 
   strategies: StrategyVersion[];
-  snapshots: SnapshotItem[];
+  monthlyStatements: MonthlyStatement[];
 }

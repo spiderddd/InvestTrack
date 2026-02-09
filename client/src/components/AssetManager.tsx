@@ -8,13 +8,13 @@ import {
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend 
 } from 'recharts';
-import { Asset, AssetCategory, SnapshotItem, StrategyVersion, AssetRecord } from '@shared/types';
+import { Asset, AssetCategory, MonthlyStatement, StrategyVersion, Position } from '@shared/types';
 import { StorageService } from '../services/storageService';
 import { useAssetGrouping } from '../hooks/useAssetGrouping';
 
 interface AssetManagerProps {
   assets: Asset[];
-  snapshots: SnapshotItem[];
+  monthlyStatements: MonthlyStatement[];
   strategies: StrategyVersion[]; 
   onUpdate: () => void; 
   onCreate: (asset: Partial<Asset>) => Promise<void>;
@@ -35,7 +35,7 @@ interface AssetHistoryRecord {
   note?: string;
 }
 
-export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, strategies, onUpdate, onCreate, onEdit, onDelete }) => {
+export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyStatements, strategies, onUpdate, onCreate, onEdit, onDelete }) => {
   const {
       searchTerm, setSearchTerm,
       showHeldOnly, setShowHeldOnly,
@@ -46,7 +46,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
       assetPerformanceMap,
       displaySections,
       CATEGORIES
-  } = useAssetGrouping(assets, snapshots, strategies);
+  } = useAssetGrouping(assets, monthlyStatements, strategies);
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -70,7 +70,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
         setLoadingHistory(true);
         StorageService.getAssetHistory(viewHistoryId)
             .then(data => {
-                // Backend now returns pre-processed snapshot history.
+                // Backend now returns pre-processed statement history.
                 // We just need to compute client-side derived fields (ROI, Profit) for display.
                 const formatted: AssetHistoryRecord[] = data.map((row: any) => ({
                     date: row.date,
@@ -620,7 +620,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, snapshots, s
                         ) : (
                             <div className="h-64 flex flex-col items-center justify-center text-slate-400">
                                 <History size={48} className="mb-4 opacity-20" />
-                                <p>该资产暂无历史快照记录。</p>
+                                <p>该资产暂无历史账单记录。</p>
                             </div>
                         )}
                         </>

@@ -128,8 +128,8 @@ export const AssetService = {
         // 2. Get all prices for this asset
         const prices = await getQuery("SELECT date, price FROM market_prices WHERE asset_id = ? ORDER BY date ASC", [assetId]);
         
-        // 3. Get snapshot dates (to align the timeline)
-        const snapshots = await getQuery("SELECT date FROM snapshots ORDER BY date ASC");
+        // 3. Get statement dates (to align the timeline)
+        const statements = await getQuery("SELECT date FROM monthly_statements ORDER BY date ASC");
         
         const history = [];
         
@@ -139,50 +139,50 @@ export const AssetService = {
         let cumQ = 0;
         let cumC = 0;
         
-        for (const s of snapshots) {
-            const snapDate = s.date;
-            
+        for (const s of statements) {
+            const statementDate = s.date;
+
             let periodAddedQ = 0;
             let periodAddedC = 0;
             let periodNotes = [];
-            
-            // Advance transaction pointer until we pass the snapshot date
-            while (txIndex < txs.length && txs[txIndex].date <= snapDate) {
+
+            // Advance transaction pointer until we pass the statement date
+            while (txIndex < txs.length && txs[txIndex].date <= statementDate) {
                 const t = txs[txIndex];
                 cumQ += t.quantity_change;
                 cumC += t.cost_change;
-                
-                // Track changes that specifically belong to this "period" (between previous snap and this one)
-                // Note: This logic assumes snapshots are chronologically processed.
+
+                // Track changes that specifically belong to this "period" (between previous statement and this one)
+                // Note: This logic assumes statements are chronologically processed.
                 periodAddedQ += t.quantity_change;
                 periodAddedC += t.cost_change;
-                
+
                 if (t.note && t.note.trim().length > 0) {
                     periodNotes.push(t.note);
                 }
-                
+
                 txIndex++;
             }
-            
+
             // If asset never existed or was fully sold long ago and no activity, we might skip
             // But if it has a non-zero quantity, we must record it.
             // If it has 0 quantity but had activity this month, record it.
             if (Math.abs(cumQ) < 0.000001 && periodAddedQ === 0 && periodAddedC === 0) {
-                continue; 
+                continue;
             }
 
             // Find price at this date
-            // Simple reverse search for latest price <= snapDate
+            // Simple reverse search for latest price <= statementDate
             let unitPrice = 0;
             for (let i = prices.length - 1; i >= 0; i--) {
-                if (prices[i].date <= snapDate) {
+                if (prices[i].date <= statementDate) {
                     unitPrice = prices[i].price;
                     break;
                 }
             }
-            
+
             history.push({
-                date: snapDate,
+                date: statementDate,
                 unitPrice: unitPrice,
                 quantity: cumQ,
                 marketValue: cumQ * unitPrice,

@@ -1,5 +1,5 @@
 
-import { SnapshotService } from './snapshotService.js';
+import { StatementService } from './statementService.js';
 import { StrategyService } from './strategyService.js';
 import { AssetService } from './assetService.js';
 
@@ -62,66 +62,66 @@ export const DashboardService = {
 
     // 1. 核心指标 (Metrics) - Uses real-time prices for current value
     getMetrics: async ({ viewMode, timeRange }) => {
-        const { items: snapshots } = await SnapshotService.getList(1, 1000);
-        if (snapshots.length === 0) return { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 };
+        const { items: statements } = await StatementService.getList(1, 1000);
+        if (statements.length === 0) return { endValue: 0, endInvested: 0, profit: 0, returnRate: 0 };
 
-        const sorted = snapshots.sort((a, b) => a.date.localeCompare(b.date));
-        
+        const sorted = statements.sort((a, b) => a.date.localeCompare(b.date));
+
         // Get real-time current portfolio
         const today = new Date().toISOString().slice(0, 10);
-        const realTimeSnapshot = await SnapshotService.getDetailsByDate(today);
-        
-        let startSnapshotSimple = null;
+        const realTimeStatement = await StatementService.getDetailsByPeriod(today);
+
+        let startStatementSimple = null;
         if (timeRange === 'ytd') {
             const currentYear = new Date().getFullYear();
-            startSnapshotSimple = sorted.find(s => s.date.startsWith(currentYear.toString())) || sorted[0];
-            // If the first snapshot of the year is the same as the end (Jan), try to find prev Dec
-            if(startSnapshotSimple && sorted.length > 1) {
-                 const idx = sorted.indexOf(startSnapshotSimple);
-                 if(idx > 0 && sorted[idx].date === startSnapshotSimple.date) {
-                     startSnapshotSimple = sorted[idx-1];
+            startStatementSimple = sorted.find(s => s.date.startsWith(currentYear.toString())) || sorted[0];
+            // If the first statement of the year is the same as the end (Jan), try to find prev Dec
+            if(startStatementSimple && sorted.length > 1) {
+                 const idx = sorted.indexOf(startStatementSimple);
+                 if(idx > 0 && sorted[idx].date === startStatementSimple.date) {
+                     startStatementSimple = sorted[idx-1];
                  }
             }
         } else if (timeRange === '1y') {
             const oneYearAgo = new Date();
             oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-            const dateStr = oneYearAgo.toISOString().slice(0, 7);
-            startSnapshotSimple = sorted.find(s => s.date >= dateStr) || sorted[0];
+            const dateStr = oneYearAgo.toISOString().slice(0, 10);
+            startStatementSimple = sorted.find(s => s.date >= dateStr) || sorted[0];
         }
 
-        // For start period, use historical snapshot
-        const startDetails = startSnapshotSimple ? await SnapshotService.getDetails(startSnapshotSimple.id) : null;
-        
+        // For start period, use historical statement
+        const startDetails = startStatementSimple ? await StatementService.getDetails(startStatementSimple.id) : null;
+
         const strategies = await StrategyService.getAll();
-        
-        const filterStrategyAssets = (snapshot, useRealTime = false) => {
-            if (!snapshot) return { v: 0, i: 0 };
-            
-            const assets = snapshot.assets || [];
+
+        const filterStrategyAssets = (statement, useRealTime = false) => {
+            if (!statement) return { v: 0, i: 0 };
+
+            const assets = statement.assets || [];
             let filteredAssets = assets;
-            
+
             if (viewMode !== 'total') {
-                const activeStrat = getStrategyForDate(strategies, useRealTime ? today : snapshot.date);
+                const activeStrat = getStrategyForDate(strategies, useRealTime ? today : statement.date);
                 const map = getAssetTargetMap(activeStrat);
                 filteredAssets = assets.filter(a => map.has(a.assetId));
             }
-            
+
             return {
                 v: filteredAssets.reduce((sum, a) => sum + a.marketValue, 0),
                 i: filteredAssets.reduce((sum, a) => sum + a.totalCost, 0)
             };
         };
 
-        // End value uses real-time snapshot with latest prices
-        const endM = filterStrategyAssets(realTimeSnapshot, true);
-        // Start value uses historical snapshot
+        // End value uses real-time statement with latest prices
+        const endM = filterStrategyAssets(realTimeStatement, true);
+        // Start value uses historical statement
         const startM = filterStrategyAssets(startDetails, false);
 
         const profit = (endM.v - endM.i) - (startM.v - startM.i);
-        // 区间收益率：全部时间用期末投入，区间用期初市值
+        // 区间收益率：全部时间用期末投入，区间用期初投入
         const returnRate = timeRange === 'all'
           ? (endM.i > 0 ? (profit / endM.i) * 100 : 0)
-          : (startM.v > 0 ? (profit / startM.v) * 100 : 0);
+          : (startM.i > 0 ? (profit / startM.i) * 100 : 0);
 
         return {
             endValue: endM.v,
@@ -137,12 +137,12 @@ export const DashboardService = {
     // 2. 资产分布 (Allocation) - Uses latest real-time prices
     getAllocation: async ({ viewMode, layerId }) => {
         const today = new Date().toISOString().slice(0, 10);
-        
+
         // Get real-time portfolio with latest prices (similar to AssetManager)
-        const realTimeSnapshot = await SnapshotService.getDetailsByDate(today);
-        if (!realTimeSnapshot || !realTimeSnapshot.assets) return [];
-        
-        const assets = realTimeSnapshot.assets;
+        const realTimeStatement = await StatementService.getDetailsByPeriod(today);
+        if (!realTimeStatement || !realTimeStatement.assets) return [];
+
+        const assets = realTimeStatement.assets;
         const totalValue = assets.reduce((sum, a) => sum + a.marketValue, 0);
         
         // 1. Total View
@@ -238,7 +238,7 @@ export const DashboardService = {
     // 3. 历史趋势 (Trend)
     getTrend: async ({ viewMode, layerId, startDate }) => {
         // Reuse the graph logic which builds daily/monthly asset states
-        const historyGraph = await SnapshotService.getHistoryGraph();
+        const historyGraph = await StatementService.getHistoryGraph();
         const strategies = await StrategyService.getAll();
         const latestStrat = strategies[0]; // For Layer definition lookup if needed
 
@@ -289,36 +289,36 @@ export const DashboardService = {
 
     // 4. 收益归因 (Attribution) - Uses real-time prices for current period
     getAttribution: async ({ viewMode, timeRange, layerId }) => {
-        const { items: snapshots } = await SnapshotService.getList(1, 1000);
-        if (snapshots.length === 0) return [];
-        
-        const sorted = snapshots.sort((a, b) => a.date.localeCompare(b.date));
-        
+        const { items: statements } = await StatementService.getList(1, 1000);
+        if (statements.length === 0) return [];
+
+        const sorted = statements.sort((a, b) => a.date.localeCompare(b.date));
+
         // For real-time end value, use today's date with latest prices
         const today = new Date().toISOString().slice(0, 10);
-        const realTimeSnapshot = await SnapshotService.getDetailsByDate(today);
-        if (!realTimeSnapshot) return [];
-        
-        let startSnapshotSimple = null;
+        const realTimeStatement = await StatementService.getDetailsByPeriod(today);
+        if (!realTimeStatement) return [];
+
+        let startStatementSimple = null;
         if (timeRange === 'ytd') {
             const currentYear = new Date().getFullYear();
-            startSnapshotSimple = sorted.find(s => s.date.startsWith(currentYear.toString())) || sorted[0];
-            if(startSnapshotSimple && sorted.length > 1) {
-                 const idx = sorted.indexOf(startSnapshotSimple);
-                 if(idx > 0 && sorted[idx].date === startSnapshotSimple.date) {
-                     startSnapshotSimple = sorted[idx-1];
+            startStatementSimple = sorted.find(s => s.date.startsWith(currentYear.toString())) || sorted[0];
+            if(startStatementSimple && sorted.length > 1) {
+                 const idx = sorted.indexOf(startStatementSimple);
+                 if(idx > 0 && sorted[idx].date === startStatementSimple.date) {
+                     startStatementSimple = sorted[idx-1];
                  }
             }
         } else if (timeRange === '1y') {
             const oneYearAgo = new Date();
             oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-            const dateStr = oneYearAgo.toISOString().slice(0, 7);
-            startSnapshotSimple = sorted.find(s => s.date >= dateStr) || sorted[0];
+            const dateStr = oneYearAgo.toISOString().slice(0, 10);
+            startStatementSimple = sorted.find(s => s.date >= dateStr) || sorted[0];
         }
 
-        // End snapshot uses real-time prices, start snapshot uses historical
-        const endSnapshot = realTimeSnapshot;
-        const startSnapshot = startSnapshotSimple ? await SnapshotService.getDetails(startSnapshotSimple.id) : { assets: [] };
+        // End statement uses real-time prices, start statement uses historical
+        const endStatement = realTimeStatement;
+        const startStatement = startStatementSimple ? await StatementService.getDetails(startStatementSimple.id) : { assets: [] };
 
         const strategies = await StrategyService.getAll();
         const activeStrategy = getStrategyForDate(strategies, today);
@@ -356,8 +356,8 @@ export const DashboardService = {
                 return res;
             };
 
-            const endStats = calcCatStats(endSnapshot);
-            const startStats = calcCatStats(startSnapshot);
+            const endStats = calcCatStats(endStatement);
+            const startStats = calcCatStats(startStatement);
             
             return categories.map(cat => {
                 const end = endStats[cat];
@@ -383,15 +383,15 @@ export const DashboardService = {
                 
                 return layer.items.map(item => {
                     const assetIds = new Set([item.assetId]);
-                    const end = getStats(endSnapshot, assetIds);
-                    const start = getStats(startSnapshot, assetIds);
-                    
+                    const end = getStats(endStatement, assetIds);
+                    const start = getStats(startStatement, assetIds);
+
                     return {
                         id: item.id,
                         name: item.targetName,
                         color: item.color,
                         endVal: end.v,
-                        endCost: end.c, 
+                        endCost: end.c,
                         changeVal: end.v - start.v,
                         changeInput: end.c - start.c,
                         profit: (end.v - end.c) - (start.v - start.c)
@@ -400,8 +400,8 @@ export const DashboardService = {
              } else {
                 return activeStrategy.layers.map((layer, idx) => {
                     const assetIds = new Set(layer.items.map(i => i.assetId));
-                    const end = getStats(endSnapshot, assetIds);
-                    const start = getStats(startSnapshot, assetIds);
+                    const end = getStats(endStatement, assetIds);
+                    const start = getStats(startStatement, assetIds);
                     
                     return {
                         id: layer.id,

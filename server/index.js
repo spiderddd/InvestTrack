@@ -12,7 +12,7 @@ import { initDB } from './db.js';
 
 import assetsRouter from './routes/assets.js';
 import strategiesRouter from './routes/strategies.js';
-import snapshotsRouter from './routes/snapshots.js';
+import statementsRouter from './routes/statements.js';
 import dashboardRouter from './routes/dashboard.js';
 import exportRouter from './routes/export.js';
 import pricesRouter from './routes/prices.js';
@@ -34,7 +34,7 @@ initDB();
 // --- Mount Routes ---
 app.use('/api/assets', assetsRouter);
 app.use('/api/strategies', strategiesRouter);
-app.use('/api/snapshots', snapshotsRouter);
+app.use('/api/statements', statementsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/export', exportRouter);
 app.use('/api/prices', pricesRouter);

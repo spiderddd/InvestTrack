@@ -78,9 +78,9 @@ export const StrategyVersionSchema = z.object({
 export const StrategyVersionCreateSchema = StrategyVersionSchema.omit({ id: true });
 
 /**
- * Asset Record Schema (for Snapshots)
+ * Position Schema (formerly AssetRecord - represents a calculated position)
  */
-export const AssetRecordSchema = z.object({
+export const PositionSchema = z.object({
   id: IdSchema,
   assetId: IdSchema,
   name: z.string().min(1),
@@ -95,12 +95,12 @@ export const AssetRecordSchema = z.object({
 });
 
 /**
- * Snapshot Schema
+ * Monthly Statement Schema
  */
-export const SnapshotSchema = z.object({
+export const MonthlyStatementSchema = z.object({
   id: IdSchema.optional(),
-  date: z.string().regex(/^\d{4}-\d{2}$/, 'Date must be YYYY-MM format'),
-  assets: z.array(AssetRecordSchema).optional(),
+  period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
+  assets: z.array(PositionSchema).optional(),
   totalValue: z.number().min(0),
   totalInvested: z.number().min(0),
   note: z.string().max(2000).optional()

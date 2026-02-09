@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { Asset, SnapshotItem, AssetCategory, AssetRecord, StrategyVersion, StrategyLayer, StrategyTarget } from '@shared/types';
+import { Asset, MonthlyStatement, MonthlyStatementDetail, AssetCategory, Position, StrategyVersion, StrategyLayer, StrategyTarget } from '@shared/types';
 import { generateId, StorageService } from '../services/storageService';
 
 export interface AssetRowInput {
@@ -17,37 +17,45 @@ export interface AssetRowInput {
   note: string; // Add note support
 }
 
-export const useSnapshotForm = (
-    snapshots: SnapshotItem[],
+export const useStatementForm = (
+    monthlyStatements: MonthlyStatement[],
     assets: Asset[],
     activeStrategy: StrategyVersion | undefined | null
 ) => {
-    const [date, setDate] = useState(() => new Date().toISOString().slice(0, 7));
+    const [date, setDate] = useState(() => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        return `${year}-${month}-01`;
+    });
     const [note, setNote] = useState('');
     const [rows, setRows] = useState<AssetRowInput[]>([]);
     const [loadingDetails, setLoadingDetails] = useState(false);
-    const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null);
+    const [selectedStatementId, setSelectedStatementId] = useState<string | null>(null);
 
-    const initEntryForm = async (snapshotId?: string) => {
+    const initEntryForm = async (statementId?: string) => {
         setLoadingDetails(true);
-        let baseDate = new Date().toISOString().slice(0, 7);
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        let baseDate = `${year}-${month}-01`;
         let baseNote = '';
         let initialRows: AssetRowInput[] = [];
 
         try {
-            let existing: SnapshotItem | null = null;
-            let prevDetails: SnapshotItem | null = null;
+            let existing: MonthlyStatementDetail | null = null;
+            let prevDetails: MonthlyStatementDetail | null = null;
 
-            if (snapshotId) {
+            if (statementId) {
                 // Editing existing mode
-                existing = await StorageService.getSnapshot(snapshotId);
+                existing = await StorageService.getMonthlyStatement(statementId);
             }
 
             const refDate = existing ? existing.date : baseDate;
             
-            // Optimization: Fetch previous snapshot specifically from backend
+            // Optimization: Fetch previous statement specifically from backend
             try {
-                const res = await fetch(`/api/snapshots/previous/${refDate}`);
+                const res = await fetch(`/api/statements/previous/${refDate}`);
                 if (res.ok) {
                     const prevData = await res.json();
                     if (prevData && prevData.id) {
@@ -55,36 +63,36 @@ export const useSnapshotForm = (
                     }
                 }
             } catch (err) {
-                console.warn("Failed to fetch previous snapshot, falling back to defaults", err);
+                console.warn("Failed to fetch previous statement, falling back to defaults", err);
             }
 
             if (existing) {
                 baseDate = existing.date;
                 baseNote = existing.note || '';
-                if (existing.assets) {
-                    initialRows = existing.assets.map((a: AssetRecord) => {
-                        const realAsset = assets.find(def => def.id === a.assetId);
-                        const prevAsset = prevDetails?.assets?.find((pa: AssetRecord) => pa.assetId === a.assetId);
+                if (existing.positions) {
+                    initialRows = existing.positions.map((p: Position) => {
+                        const realAsset = assets.find(def => def.id === p.assetId);
+                        const prevAsset = prevDetails?.positions?.find((pa: Position) => pa.assetId === p.assetId);
                         
-                        const isSell = a.addedQuantity < 0 || a.addedPrincipal < 0;
+                        const isSell = p.addedQuantity < 0 || p.addedPrincipal < 0;
 
                         return {
-                            recordId: a.id,
-                            assetId: a.assetId,
-                            name: realAsset ? realAsset.name : a.name, 
-                            category: realAsset ? realAsset.type : a.category, 
-                            price: a.unitPrice.toString(),
+                            recordId: p.id,
+                            assetId: p.assetId,
+                            name: realAsset ? realAsset.name : p.name, 
+                            category: realAsset ? realAsset.type : p.category, 
+                            price: p.unitPrice.toString(),
                             transactionType: isSell ? 'sell' : 'buy',
-                            quantityChange: Math.abs(a.addedQuantity).toString(),
-                            costChange: Math.abs(a.addedPrincipal).toString(),
-                            prevQuantity: prevAsset ? prevAsset.quantity : (a.quantity - a.addedQuantity),
-                            prevCost: prevAsset ? prevAsset.totalCost : (a.totalCost - a.addedPrincipal),
-                            note: a.note || ''
+                            quantityChange: Math.abs(p.addedQuantity).toString(),
+                            costChange: Math.abs(p.addedPrincipal).toString(),
+                            prevQuantity: prevAsset ? prevAsset.quantity : (p.quantity - p.addedQuantity),
+                            prevCost: prevAsset ? prevAsset.totalCost : (p.totalCost - p.addedPrincipal),
+                            note: p.note || ''
                         };
                     });
                 }
             } else {
-                // New Snapshot
+                // New Statement
                 if (activeStrategy && activeStrategy.layers) {
                     const allTargets = activeStrategy.layers.flatMap((l: StrategyLayer) => l.items);
 
@@ -112,9 +120,9 @@ export const useSnapshotForm = (
 
                     allTargets.forEach((item: StrategyTarget) => {
                         const realAsset = assets.find((a: Asset) => a.id === item.assetId);
-                        const prevAsset = prevDetails?.assets?.find((a: AssetRecord) => a.assetId === item.assetId);
+                        const prevAsset = prevDetails?.positions?.find((a: Position) => a.assetId === item.assetId);
 
-                        // Use current price from API, fall back to prev snapshot price, then 0.0
+                        // Use current price from API, fall back to prev statement price, then 0.0
                         const currentPrice = priceMap[item.assetId]?.price;
                         const prevPrice = prevAsset ? prevAsset.unitPrice : 0;
 
@@ -133,26 +141,26 @@ export const useSnapshotForm = (
                         });
                     });
                 } else {
-                    console.log('[SnapshotForm] No active strategy or no layers');
+                    console.log('[StatementForm] No active strategy or no layers');
                 }
 
                 // Add assets held in previous month but not in strategy
-                if (prevDetails && prevDetails.assets) {
-                    prevDetails.assets.forEach((a: AssetRecord) => {
-                        const alreadyAdded = initialRows.find(r => r.assetId === a.assetId);
+                if (prevDetails && prevDetails.positions) {
+                    prevDetails.positions.forEach((p: Position) => {
+                        const alreadyAdded = initialRows.find(r => r.assetId === p.assetId);
                         if (!alreadyAdded) { 
-                            const realAsset = assets.find(def => def.id === a.assetId);
+                            const realAsset = assets.find(def => def.id === p.assetId);
                             initialRows.push({
                                 recordId: generateId(),
-                                assetId: a.assetId,
-                                name: realAsset ? realAsset.name : a.name,
-                                category: realAsset ? realAsset.type : a.category,
-                                price: a.unitPrice.toString(),
+                                assetId: p.assetId,
+                                name: realAsset ? realAsset.name : p.name,
+                                category: realAsset ? realAsset.type : p.category,
+                                price: p.unitPrice.toString(),
                                 transactionType: 'buy',
                                 quantityChange: '',
                                 costChange: '',
-                                prevQuantity: a.quantity,
-                                prevCost: a.totalCost,
+                                prevQuantity: p.quantity,
+                                prevCost: p.totalCost,
                                 note: ''
                             });
                         }
@@ -163,10 +171,10 @@ export const useSnapshotForm = (
             setDate(baseDate);
             setNote(baseNote);
             setRows(initialRows);
-            setSelectedSnapshotId(snapshotId || null);
+            setSelectedStatementId(statementId || null);
         } catch (e) {
-            console.error("Error loading snapshot details", e);
-            alert("无法加载快照详情，请检查网络连接");
+            console.error("Error loading statement details", e);
+            alert("无法加载月度账单详情，请检查网络连接");
         } finally {
             setLoadingDetails(false);
         }
@@ -219,8 +227,8 @@ export const useSnapshotForm = (
         }
     };
 
-    const prepareSubmission = (): SnapshotItem => {
-        const finalAssets: AssetRecord[] = rows.map(r => {
+    const prepareSubmission = (): MonthlyStatementDetail => {
+        const finalPositions: Position[] = rows.map(r => {
             const price = (r.category === 'fixed' || r.category === 'wealth') ? 1 : (parseFloat(r.price) || 0);
             const sign = r.transactionType === 'sell' ? -1 : 1;
             
@@ -248,13 +256,14 @@ export const useSnapshotForm = (
             };
         });
 
-        const totalVal = finalAssets.reduce((sum: number, a: AssetRecord) => sum + a.marketValue, 0);
-        const totalInv = finalAssets.reduce((sum: number, a: AssetRecord) => sum + a.totalCost, 0);
+        const totalVal = finalPositions.reduce((sum: number, p: Position) => sum + p.marketValue, 0);
+        const totalInv = finalPositions.reduce((sum: number, p: Position) => sum + p.totalCost, 0);
 
         return {
-            id: selectedSnapshotId || generateId(),
+            id: selectedStatementId || generateId(),
             date,
-            assets: finalAssets,
+            positions: finalPositions,
+            totalValue: totalVal,
             totalInvested: totalInv,
             note: note
         };
@@ -265,7 +274,7 @@ export const useSnapshotForm = (
         note, setNote,
         rows,
         loadingDetails,
-        selectedSnapshotId,
+        selectedStatementId,
         initEntryForm,
         updateRow,
         addAssetRow,

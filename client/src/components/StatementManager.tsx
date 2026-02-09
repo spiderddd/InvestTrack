@@ -1,22 +1,22 @@
 
 import React, { useState, useMemo } from 'react';
-import { SnapshotItem, StrategyVersion, Asset } from '@shared/types';
+import { MonthlyStatement, StrategyVersion, Asset } from '@shared/types';
 import { getStrategyForDate } from '../utils/calculators';
-import { useSnapshotForm } from '../hooks/useSnapshotForm';
-import { SnapshotList } from './snapshots/SnapshotList';
-import { SnapshotEntryForm } from './snapshots/SnapshotEntryForm';
+import { useStatementForm } from '../hooks/useStatementForm';
+import { MonthlyStatementList } from './statements/MonthlyStatementList';
+import { MonthlyStatementForm } from './statements/MonthlyStatementForm';
 
-interface SnapshotManagerProps {
-  snapshots: SnapshotItem[];
+interface StatementManagerProps {
+  monthlyStatements: MonthlyStatement[];
   strategies: StrategyVersion[];
   assets?: Asset[]; 
-  onUpdate: (snapshots: SnapshotItem[]) => void;
-  onSave?: (snapshot: SnapshotItem) => void;
+  onUpdate: (monthlyStatements: MonthlyStatement[]) => void;
+  onSave?: (statement: MonthlyStatement) => void;
   onCreateAsset?: (asset: Partial<Asset>) => Promise<void>;
 }
 
-const SnapshotManager: React.FC<SnapshotManagerProps> = ({ 
-  snapshots, 
+const StatementManager: React.FC<StatementManagerProps> = ({ 
+  monthlyStatements, 
   strategies: versions, 
   assets = [],
   onUpdate, 
@@ -26,24 +26,24 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
   const [viewMode, setViewMode] = useState<'list' | 'entry'>('list');
 
   // Determine active strategy based on current date context (default to latest, prefer active)
-  const tempDate = new Date().toISOString().slice(0, 7);
+  const tempPeriod = new Date().toISOString().slice(0, 7);
 
   const activeStrategy = useMemo(() => {
-    // Priority 1: Find active strategy that matches the date
+    // Priority 1: Find active strategy that matches the period
     const activeVersions = versions.filter(v => v.status === 'active');
     const activeMatch = activeVersions.length > 0
-      ? getStrategyForDate(activeVersions, tempDate)
+      ? getStrategyForDate(activeVersions, tempPeriod)
       : null;
 
     // Priority 2: Fall back to latest version (even if archived)
     const fallback = versions.length > 0 ? versions[versions.length - 1] : null;
 
     return activeMatch || fallback;
-  }, [versions, tempDate]);
+  }, [versions, tempPeriod]);
 
   // Use Custom Hook for Form Logic - Lifted here to pass down
-  const formHook = useSnapshotForm(snapshots, assets, activeStrategy);
-  const { initEntryForm, prepareSubmission, loadingDetails, selectedSnapshotId } = formHook;
+  const formHook = useStatementForm(monthlyStatements, assets, activeStrategy);
+  const { initEntryForm, prepareSubmission, loadingDetails, selectedStatementId } = formHook;
 
   // Handlers
   const handleInitEntry = async (id?: string) => {
@@ -53,17 +53,17 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
 
   const handleSubmit = () => {
     if (onSave) {
-        const snapshot = prepareSubmission();
-        onSave(snapshot);
+        const statement = prepareSubmission();
+        onSave(statement);
         setViewMode('list');
     }
   };
 
   if (viewMode === 'entry') {
       return (
-          <SnapshotEntryForm 
+          <MonthlyStatementForm 
               assets={assets}
-              selectedSnapshotId={selectedSnapshotId}
+              selectedStatementId={selectedStatementId}
               formHook={formHook}
               onCancel={() => setViewMode('list')}
               onSubmit={handleSubmit}
@@ -73,13 +73,13 @@ const SnapshotManager: React.FC<SnapshotManagerProps> = ({
   }
 
   return (
-      <SnapshotList 
-          snapshots={snapshots}
+      <MonthlyStatementList 
+          monthlyStatements={monthlyStatements}
           loadingDetails={loadingDetails}
-          selectedSnapshotId={selectedSnapshotId}
+          selectedStatementId={selectedStatementId}
           onInitEntry={handleInitEntry}
       />
   );
 };
 
-export default SnapshotManager;
+export default StatementManager;

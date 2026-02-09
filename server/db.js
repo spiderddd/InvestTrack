@@ -16,7 +16,7 @@ const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'invest_track_v2.db')
 const sqlite3Verbose = sqlite3.verbose();
 export const db = new sqlite3Verbose.Database(DB_PATH);
 
-const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+const SCHEMA_PATH = path.join(__dirname, 'db', 'schema.sql');
 
 export const initDB = () => {
     db.serialize(() => {

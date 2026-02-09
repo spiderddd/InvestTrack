@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS strategy_targets (
     FOREIGN KEY(asset_id) REFERENCES assets(id)
 );
 
-CREATE TABLE IF NOT EXISTS snapshots (
+CREATE TABLE IF NOT EXISTS monthly_statements (
     id TEXT PRIMARY KEY,
     date TEXT NOT NULL UNIQUE,
     note TEXT,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS market_prices (
 CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,
     asset_id TEXT NOT NULL,
-    snapshot_id TEXT,
+    statement_id TEXT,
     date TEXT NOT NULL,
     type TEXT,
     quantity_change REAL DEFAULT 0,
@@ -73,4 +73,4 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 CREATE INDEX IF NOT EXISTS idx_prices_asset_date ON market_prices(asset_id, date);
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-CREATE INDEX IF NOT EXISTS idx_transactions_snapshot ON transactions(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_statement ON transactions(statement_id);

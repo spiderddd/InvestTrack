@@ -3,31 +3,31 @@ import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Plus, Calendar, Activity, ChevronDown, ChevronUp, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { SnapshotItem } from '@shared/types';
+import { MonthlyStatement } from '@shared/types';
 import { useData } from '../../contexts/DataContext';
 
-interface SnapshotListProps {
-    snapshots: SnapshotItem[];
+interface MonthlyStatementListProps {
+    monthlyStatements: MonthlyStatement[];
     loadingDetails: boolean;
-    selectedSnapshotId: string | null;
+    selectedStatementId: string | null;
     onInitEntry: (id?: string) => void;
 }
 
-export const SnapshotList: React.FC<SnapshotListProps> = ({ 
-    snapshots, 
+export const MonthlyStatementList: React.FC<MonthlyStatementListProps> = ({ 
+    monthlyStatements, 
     loadingDetails, 
-    selectedSnapshotId, 
+    selectedStatementId, 
     onInitEntry 
 }) => {
-    const { snapshotPage, setSnapshotPage, snapshotTotal } = useData();
+    const { statementPage, setStatementPage, statementTotal } = useData();
     const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
 
-    const sortedSnapshots = [...snapshots].sort((a, b) => b.date.localeCompare(a.date));
+    const sortedStatements = [...monthlyStatements].sort((a, b) => b.date.localeCompare(a.date));
 
     // Pagination Calculation
-    const totalPages = Math.ceil(snapshotTotal / 20);
-    const hasNext = snapshotPage < totalPages;
-    const hasPrev = snapshotPage > 1;
+    const totalPages = Math.ceil(statementTotal / 20);
+    const hasNext = statementPage < totalPages;
+    const hasPrev = statementPage > 1;
 
     const toggleNote = (id: string) => {
         const newSet = new Set(expandedNotes);
@@ -40,7 +40,7 @@ export const SnapshotList: React.FC<SnapshotListProps> = ({
         <div className="pb-20">
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800">月度账本</h2>
+                    <h2 className="text-2xl font-bold text-slate-800">月度账单</h2>
                     <p className="text-slate-500 text-sm">统一管理所有资产的市值与流水变动。</p>
                 </div>
                 <button
@@ -54,13 +54,13 @@ export const SnapshotList: React.FC<SnapshotListProps> = ({
             </div>
 
             <div className="space-y-4">
-                {sortedSnapshots.length === 0 ? (
+                {sortedStatements.length === 0 ? (
                     <div className="bg-white p-12 text-center rounded-xl border border-slate-100 text-slate-400">
                         <Activity size={48} className="mx-auto mb-4 opacity-20" />
                         <p>暂无记录。点击右上角开始记账。</p>
                     </div>
                 ) : (
-                    sortedSnapshots.map(s => {
+                    sortedStatements.map(s => {
                         return (
                             <div key={s.id} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
                                 <div className="p-4 flex items-center justify-between bg-slate-50/50 border-b border-slate-100">
@@ -71,14 +71,14 @@ export const SnapshotList: React.FC<SnapshotListProps> = ({
                                         </div>
                                         <div>
                                             <div className="text-sm text-slate-500">本月投入</div>
-                                            <div className="font-bold text-slate-800 text-lg">¥{(s.totalInvested ?? 0).toLocaleString()}</div>
+                                            <div className="font-bold text-slate-800 text-lg">¥{((s as any).totalInvested ?? 0).toLocaleString()}</div>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-6">
                                         <div className="flex gap-2">
                                             <button onClick={() => onInitEntry(s.id)} disabled={loadingDetails} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                                {loadingDetails && selectedSnapshotId === s.id ? <Loader2 className="animate-spin" size={18} /> : <Calendar size={18} />}
+                                                {loadingDetails && selectedStatementId === s.id ? <Loader2 className="animate-spin" size={18} /> : <Calendar size={18} />}
                                             </button>
                                         </div>
                                     </div>
@@ -110,17 +110,17 @@ export const SnapshotList: React.FC<SnapshotListProps> = ({
             {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-4 mt-8">
                     <button
-                        onClick={() => setSnapshotPage(snapshotPage - 1)}
+                        onClick={() => setStatementPage(statementPage - 1)}
                         disabled={!hasPrev}
                         className={`p-2 rounded-lg flex items-center gap-1 text-sm font-medium ${!hasPrev ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-200 bg-white shadow-sm border border-slate-200'}`}
                     >
                         <ChevronLeft size={16} /> 上一页
                     </button>
                     <span className="text-sm text-slate-500 font-medium">
-                        第 {snapshotPage} 页 / 共 {totalPages} 页
+                        第 {statementPage} 页 / 共 {totalPages} 页
                     </span>
                     <button
-                        onClick={() => setSnapshotPage(snapshotPage + 1)}
+                        onClick={() => setStatementPage(statementPage + 1)}
                         disabled={!hasNext}
                         className={`p-2 rounded-lg flex items-center gap-1 text-sm font-medium ${!hasNext ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-200 bg-white shadow-sm border border-slate-200'}`}
                     >

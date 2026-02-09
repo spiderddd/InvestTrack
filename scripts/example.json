@@ -61,13 +61,13 @@
         ]}
     ]
   }],
-  "snapshots": [
-    { "date": "2024-06", "note": "# 2024-06 投资笔记\n\n半年总结：整体跑赢通胀，继续保持。",
+  "monthlyStatements": [
+    { "date": "2024-06-30", "note": "# 2024-06 投资笔记\n\n半年总结：整体跑赢通胀，继续保持。",
       "transactions": [
         { "assetName": "实物黄金", "type": "adjustment", "quantityChange": 4.0743, "costChange": 2000, "note": "定投扣款" },
         { "assetName": "纳指100ETF", "type": "adjustment", "quantityChange": 1724.1379, "costChange": 2000, "note": "定投扣款" }
       ]},
-    { "date": "2024-05", "note": "# 2024-05 投资笔记\n\n发奖金了，买入一点理财。",
+    { "date": "2024-05-31", "note": "# 2024-05 投资笔记\n\n发奖金了，买入一点理财。",
       "transactions": [
         { "assetName": "Bitcoin", "type": "adjustment", "quantityChange": 0.0037, "costChange": 2000, "note": "定投扣款" },
         { "assetName": "实物黄金", "type": "adjustment", "quantityChange": 4.0105, "costChange": 2000, "note": "看好后世加仓" },
@@ -75,17 +75,17 @@
         { "assetName": "腾讯控股", "type": "adjustment", "quantityChange": 5.6434, "costChange": 2000, "note": "看好后世加仓" },
         { "assetName": "沪深300ETF", "type": "adjustment", "quantityChange": 582.6317, "costChange": 2000, "note": "定投扣款" }
       ]},
-    { "date": "2024-04", "note": "# 2024-04 投资笔记\n\n黄金涨疯了，稍微止盈了一点。",
+    { "date": "2024-04-30", "note": "# 2024-04 投资笔记\n\n黄金涨疯了，稍微止盈了一点。",
       "transactions": [
         { "assetName": "实物黄金", "type": "adjustment", "quantityChange": 3.8208, "costChange": 2000, "note": "看好后世加仓" }
       ]},
-    { "date": "2024-03", "note": "# 2024-03 投资笔记\n\nA股这就3000点保卫战了？加仓！", "transactions": []},
-    { "date": "2024-02", "note": "# 2024-02 投资笔记\n\n美股持续新高，但这部分仓位不动。",
+    { "date": "2024-03-31", "note": "# 2024-03 投资笔记\n\nA股这就3000点保卫战了？加仓！", "transactions": []},
+    { "date": "2024-02-29", "note": "# 2024-02 投资笔记\n\n美股持续新高，但这部分仓位不动。",
       "transactions": [
         { "assetName": "备用金(余额宝)", "type": "adjustment", "quantityChange": 60, "costChange": 0, "note": "" },
         { "assetName": "Bitcoin", "type": "adjustment", "quantityChange": 0.0042, "costChange": 2000, "note": "定投扣款" }
       ]},
-    { "date": "2024-01", "note": "# 2024-01 投资笔记\n\n建仓完成，期待今年表现。",
+    { "date": "2024-01-31", "note": "# 2024-01 投资笔记\n\n建仓完成，期待今年表现。",
       "transactions": [
         { "assetName": "备用金(余额宝)", "type": "adjustment", "quantityChange": 20000, "costChange": 20000, "note": "初始建仓" },
         { "assetName": "Bitcoin", "type": "adjustment", "quantityChange": 0.1, "costChange": 45000, "note": "初始建仓" },

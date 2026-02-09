@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { History, TrendingUp, Wallet, Calendar, Filter, ArrowRight } from 'lucide-react';
-import { StrategyVersion, SnapshotItem, StrategyLayer } from '@shared/types';
+import { StrategyVersion, MonthlyStatement, StrategyLayer } from '@shared/types';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { MetricsCards } from './dashboard/MetricsCards';
 import { AllocationSection } from './dashboard/AllocationSection';
@@ -9,16 +9,16 @@ import { HistorySection } from './dashboard/HistorySection';
 
 interface DashboardProps {
   strategies: StrategyVersion[]; 
-  snapshots: SnapshotItem[];
+  monthlyStatements: MonthlyStatement[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }) => {
+const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, monthlyStatements }) => {
   const {
     viewMode, setViewMode,
     timeRange, setTimeRange,
     selectedLayerId, setSelectedLayerId,
     rangeConfig,
-    startSnapshot, endSnapshot,
+    startStatement, endStatement,
     loadingDetails,
     endMetrics, startMetrics,
     activeStrategyEnd,
@@ -26,7 +26,7 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
     historyData,
     breakdownData,
     breakdownTotals
-  } = useDashboardData(versions, snapshots);
+  } = useDashboardData(versions, monthlyStatements);
 
   const selectedLayerInfo = activeStrategyEnd?.layers.find((l: StrategyLayer) => l.id === selectedLayerId);
 
@@ -63,23 +63,25 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
         <div className="text-xs text-slate-500 flex flex-wrap items-center gap-2 bg-blue-50/50 p-2 rounded-lg border border-blue-100">
            <Filter size={12} className="text-blue-500" />
            <span className="font-semibold text-blue-700">{rangeConfig.label}区间分析:</span>
-           <div className="flex items-center gap-1">
-             <span className="bg-white px-1.5 py-0.5 rounded border border-blue-100">{startSnapshot ? startSnapshot.date : '期初'}</span>
-             <ArrowRight size={12} className="text-blue-300" />
-             <span className="bg-white px-1.5 py-0.5 rounded border border-blue-100">{endSnapshot?.date || '...'}</span>
-           </div>
+            <div className="flex items-center gap-1">
+               <span className="bg-white px-1.5 py-0.5 rounded border border-blue-100">{startStatement ? startStatement.date : '期初'}</span>
+               <ArrowRight size={12} className="text-blue-300" />
+               <span className="bg-white px-1.5 py-0.5 rounded border border-blue-100">{endStatement?.date || '...'}</span>
+             </div>
            <span className="text-slate-400 ml-auto hidden sm:inline">基于区间变动计算盈亏</span>
         </div>
       )}
 
       {/* Metrics Cards */}
-      <MetricsCards 
+      <MetricsCards
           viewMode={viewMode}
           timeRange={timeRange}
           rangeConfig={rangeConfig}
           loading={loadingDetails}
-          endMetrics={endMetrics}
-          startMetrics={startMetrics}
+          endValue={endMetrics.value}
+          endInvested={endMetrics.invested}
+          profit={endMetrics.profit}
+          returnRate={endMetrics.returnRate}
       />
 
       {/* Charts */}
@@ -104,8 +106,8 @@ const Dashboard: React.FC<DashboardProps> = ({ strategies: versions, snapshots }
             breakdownData={breakdownData}
             breakdownTotals={breakdownTotals}
             rangeConfig={rangeConfig}
-            startSnapshot={startSnapshot}
-            endSnapshot={endSnapshot}
+            startStatement={startStatement}
+            endStatement={endStatement}
         />
       </div>
     </div>

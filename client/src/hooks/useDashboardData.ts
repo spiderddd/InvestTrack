@@ -1,13 +1,13 @@
 
 import { useState, useMemo, useEffect } from 'react';
-import { StrategyVersion, SnapshotItem, AssetRecord } from '@shared/types';
+import { StrategyVersion, MonthlyStatement, Position } from '@shared/types';
 import { StorageService } from '../services/storageService';
 import { getStrategyForDate } from '../utils/calculators';
 
 type ViewMode = 'strategy' | 'total';
 type TimeRange = 'all' | 'ytd' | '1y';
 
-export const useDashboardData = (strategies: StrategyVersion[], snapshots: SnapshotItem[]) => {
+export const useDashboardData = (strategies: StrategyVersion[], statements: MonthlyStatement[]) => {
   const [viewMode, setViewMode] = useState<ViewMode>('strategy');
   const [timeRange, setTimeRange] = useState<TimeRange>('all');
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -36,11 +36,11 @@ export const useDashboardData = (strategies: StrategyVersion[], snapshots: Snaps
   }, [timeRange]);
 
   const activeStrategyEnd = useMemo(() => {
-      // Find the latest snapshot date from props to determine active strategy for labels
-      if (snapshots.length === 0) return null;
-      const sorted = [...snapshots].sort((a,b) => b.date.localeCompare(a.date));
+      // Find the latest statement date from props to determine active strategy for labels
+      if (statements.length === 0) return null;
+      const sorted = [...statements].sort((a,b) => b.date.localeCompare(a.date));
       return getStrategyForDate(strategies, sorted[0].date);
-  }, [strategies, snapshots]);
+  }, [strategies, statements]);
 
   // Fetch Data Effect - Optimized to single request
   useEffect(() => {
@@ -94,24 +94,24 @@ export const useDashboardData = (strategies: StrategyVersion[], snapshots: Snaps
     }), { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0 });
   }, [breakdownData]);
 
-  // Determine start/end snapshot labels for UI (approximate from props is fine for labels)
-  const uiSnapshots = useMemo(() => {
-      const sorted = [...snapshots].sort((a: SnapshotItem, b: SnapshotItem) => a.date.localeCompare(b.date));
+  // Determine start/end statement labels for UI (approximate from props is fine for labels)
+  const uiStatements = useMemo(() => {
+      const sorted = [...statements].sort((a: MonthlyStatement, b: MonthlyStatement) => a.date.localeCompare(b.date));
       const end = sorted[sorted.length - 1] || null;
       let start = null;
       if (rangeConfig.startDate) {
           start = sorted.find(s => s.date >= rangeConfig.startDate!) || sorted[0];
       }
       return { start, end };
-  }, [snapshots, rangeConfig]);
+  }, [statements, rangeConfig]);
 
   return {
     viewMode, setViewMode,
     timeRange, setTimeRange,
     selectedLayerId, setSelectedLayerId,
     rangeConfig,
-    startSnapshot: uiSnapshots.start, 
-    endSnapshot: uiSnapshots.end,
+    startStatement: uiStatements.start,
+    endStatement: uiStatements.end,
     loadingDetails,
     endMetrics, 
     startMetrics, // Kept for interface compatibility

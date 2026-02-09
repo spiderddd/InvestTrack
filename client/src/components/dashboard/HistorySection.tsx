@@ -2,7 +2,7 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Legend, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { Layers, Loader2 } from 'lucide-react';
-import { SnapshotItem, StrategyLayer } from '@shared/types';
+import { MonthlyStatement, StrategyLayer } from '@shared/types';
 
 interface HistorySectionProps {
     loading: boolean;
@@ -13,13 +13,13 @@ interface HistorySectionProps {
     breakdownData: any[];
     breakdownTotals: any;
     rangeConfig: { label: string };
-    startSnapshot: SnapshotItem | null;
-    endSnapshot: SnapshotItem | null;
+    startStatement: MonthlyStatement | null;
+    endStatement: MonthlyStatement | null;
 }
 
 export const HistorySection: React.FC<HistorySectionProps> = ({
     loading, viewMode, selectedLayerId, selectedLayerInfo, historyData, 
-    breakdownData, breakdownTotals, rangeConfig, startSnapshot, endSnapshot
+    breakdownData, breakdownTotals, rangeConfig, startStatement, endStatement
 }) => {
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col">
@@ -72,7 +72,7 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
                         {viewMode === 'total' ? '本期类别变动明细' : (selectedLayerId ? '本期资产变动明细' : '本期层级变动明细')}
                     </h4>
                     <span className="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded">
-                        区间: {startSnapshot ? startSnapshot.date : '期初'} → {endSnapshot?.date || '...'}
+                        区间: {startStatement ? startStatement.date : '期初'} → {endStatement?.date || '...'}
                     </span>
                 </div>
 

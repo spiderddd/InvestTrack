@@ -4,20 +4,20 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Save, FileText, Calendar, Plus, TrendingUp, Briefcase, Landmark, Coins, Wallet, Bitcoin, MessageSquare, Trash2, X } from 'lucide-react';
 import { Asset, AssetCategory } from '@shared/types';
-import { useSnapshotForm } from '../../hooks/useSnapshotForm';
+import { useStatementForm } from '../../hooks/useStatementForm';
 
-interface SnapshotEntryFormProps {
+interface MonthlyStatementFormProps {
     assets: Asset[];
-    selectedSnapshotId: string | null;
-    formHook: ReturnType<typeof useSnapshotForm>;
+    selectedStatementId: string | null;
+    formHook: ReturnType<typeof useStatementForm>;
     onCancel: () => void;
     onSubmit: () => void;
     onCreateAsset: (asset: Partial<Asset>) => Promise<void>;
 }
 
-export const SnapshotEntryForm: React.FC<SnapshotEntryFormProps> = ({
+export const MonthlyStatementForm: React.FC<MonthlyStatementFormProps> = ({
     assets,
-    selectedSnapshotId,
+    selectedStatementId,
     formHook,
     onCancel,
     onSubmit,
@@ -71,7 +71,7 @@ export const SnapshotEntryForm: React.FC<SnapshotEntryFormProps> = ({
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center sticky top-0 z-10">
                     <div>
                         <h2 className="text-xl font-bold text-slate-800">
-                            {selectedSnapshotId ? '编辑资产负债表' : '录入月度账本'}
+                            {selectedStatementId ? '编辑资产负债表' : '录入月度账单'}
                         </h2>
                         <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                             <span>{date}</span>
@@ -95,10 +95,10 @@ export const SnapshotEntryForm: React.FC<SnapshotEntryFormProps> = ({
                             <div className="relative">
                                 <Calendar className="absolute left-3 top-2.5 text-slate-400" size={18} />
                                 <input
-                                    type="month"
+                                    type="date"
                                     className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     value={date} onChange={e => setDate(e.target.value)}
-                                    disabled={!!selectedSnapshotId}
+                                    disabled={!!selectedStatementId}
                                 />
                             </div>
                         </div>
