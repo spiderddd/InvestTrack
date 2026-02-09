@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
 import { MonthlyStatement, StrategyVersion, Asset } from '@shared/types';
-import { getStrategyForDate } from '../utils/calculators';
 import { useStatementForm } from '../hooks/useStatementForm';
 import { MonthlyStatementList } from './statements/MonthlyStatementList';
 import { MonthlyStatementForm } from './statements/MonthlyStatementForm';
@@ -29,17 +28,13 @@ const StatementManager: React.FC<StatementManagerProps> = ({
   const tempPeriod = new Date().toISOString().slice(0, 7);
 
   const activeStrategy = useMemo(() => {
-    // Priority 1: Find active strategy that matches the period
-    const activeVersions = versions.filter(v => v.status === 'active');
-    const activeMatch = activeVersions.length > 0
-      ? getStrategyForDate(activeVersions, tempPeriod)
-      : null;
-
+    if (versions.length === 0) return null;
+    // Priority 1: Find active strategy
+    const active = versions.find(v => v.status === 'active');
+    if (active) return active;
     // Priority 2: Fall back to latest version (even if archived)
-    const fallback = versions.length > 0 ? versions[versions.length - 1] : null;
-
-    return activeMatch || fallback;
-  }, [versions, tempPeriod]);
+    return versions[versions.length - 1];
+  }, [versions]);
 
   // Use Custom Hook for Form Logic - Lifted here to pass down
   const formHook = useStatementForm(monthlyStatements, assets, activeStrategy);

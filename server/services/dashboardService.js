@@ -290,14 +290,14 @@ export const DashboardService = {
     // 4. 收益归因 (Attribution) - Uses real-time prices for current period
     getAttribution: async ({ viewMode, timeRange, layerId }) => {
         const { items: statements } = await StatementService.getList(1, 1000);
-        if (statements.length === 0) return [];
+        if (statements.length === 0) return { items: [], totals: { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 } };
 
         const sorted = statements.sort((a, b) => a.date.localeCompare(b.date));
 
         // For real-time end value, use today's date with latest prices
         const today = new Date().toISOString().slice(0, 10);
         const realTimeStatement = await StatementService.getDetailsByPeriod(today);
-        if (!realTimeStatement) return [];
+        if (!realTimeStatement) return { items: [], totals: { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 } };
 
         let startStatementSimple = null;
         if (timeRange === 'ytd') {
@@ -332,6 +332,11 @@ export const DashboardService = {
             };
         };
 
+        // Helper to calculate ROI
+        const calculateROI = (profit, cost) => cost > 0 ? (profit / cost) * 100 : 0;
+
+        let items = [];
+
         if (viewMode === 'total') {
              const categories = ['股票基金', '现金固收', '商品另类', '其他'];
              const catMap = {
@@ -359,9 +364,10 @@ export const DashboardService = {
             const endStats = calcCatStats(endStatement);
             const startStats = calcCatStats(startStatement);
             
-            return categories.map(cat => {
+            items = categories.map(cat => {
                 const end = endStats[cat];
                 const start = startStats[cat];
+                const profit = (end.v - end.c) - (start.v - start.c);
                 return {
                     id: cat,
                     name: cat,
@@ -370,21 +376,23 @@ export const DashboardService = {
                     endCost: end.c,
                     changeVal: end.v - start.v,
                     changeInput: end.c - start.c,
-                    profit: (end.v - end.c) - (start.v - start.c)
+                    profit: profit,
+                    roi: calculateROI(profit, end.c)
                 };
             }).filter(r => r.endVal > 0 || Math.abs(r.changeVal) > 0 || Math.abs(r.profit) > 0).sort((a,b) => b.endVal - a.endVal);
         } else {
              // Strategy Breakdown
-             if (!activeStrategy) return [];
+             if (!activeStrategy) return { items: [], totals: { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 } };
              
              if (layerId) {
                 const layer = activeStrategy.layers.find(l => l.id === layerId);
-                if (!layer) return [];
+                if (!layer) return { items: [], totals: { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 } };
                 
-                return layer.items.map(item => {
+                items = layer.items.map(item => {
                     const assetIds = new Set([item.assetId]);
                     const end = getStats(endStatement, assetIds);
                     const start = getStats(startStatement, assetIds);
+                    const profit = (end.v - end.c) - (start.v - start.c);
 
                     return {
                         id: item.id,
@@ -394,14 +402,16 @@ export const DashboardService = {
                         endCost: end.c,
                         changeVal: end.v - start.v,
                         changeInput: end.c - start.c,
-                        profit: (end.v - end.c) - (start.v - start.c)
+                        profit: profit,
+                        roi: calculateROI(profit, end.c)
                     };
                 }).sort((a,b) => b.endVal - a.endVal);
              } else {
-                return activeStrategy.layers.map((layer, idx) => {
+                items = activeStrategy.layers.map((layer, idx) => {
                     const assetIds = new Set(layer.items.map(i => i.assetId));
                     const end = getStats(endStatement, assetIds);
                     const start = getStats(startStatement, assetIds);
+                    const profit = (end.v - end.c) - (start.v - start.c);
                     
                     return {
                         id: layer.id,
@@ -411,10 +421,25 @@ export const DashboardService = {
                         endCost: end.c,
                         changeVal: end.v - start.v,
                         changeInput: end.c - start.c,
-                        profit: (end.v - end.c) - (start.v - start.c)
+                        profit: profit,
+                        roi: calculateROI(profit, end.c)
                     };
                 });
              }
         }
+
+        // Calculate totals
+        const totals = items.reduce((acc, row) => ({
+            endVal: acc.endVal + row.endVal,
+            endCost: acc.endCost + row.endCost,
+            changeVal: acc.changeVal + row.changeVal,
+            changeInput: acc.changeInput + row.changeInput,
+            profit: acc.profit + row.profit
+        }), { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0 });
+
+        // Add total ROI
+        totals.roi = calculateROI(totals.profit, totals.endCost);
+
+        return { items, totals };
     }
 };

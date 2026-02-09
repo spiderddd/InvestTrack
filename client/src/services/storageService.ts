@@ -71,8 +71,26 @@ export const StorageService = {
           const res = await fetch(url);
           if (!res.ok) throw new Error('Failed to fetch breakdown');
           const data = await res.json();
-          return data.data || [];
-      } catch (e) { console.error(e); return []; }
+          const result = data.data || { items: [], totals: { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 } };
+          // Ensure backwards compatibility
+          if (Array.isArray(result)) {
+              // Old API format: calculate totals from items
+              const items = result;
+              const totals = items.reduce((acc, row) => ({
+                  endVal: acc.endVal + (row.endVal || 0),
+                  endCost: acc.endCost + (row.endCost || 0),
+                  changeVal: acc.changeVal + (row.changeVal || 0),
+                  changeInput: acc.changeInput + (row.changeInput || 0),
+                  profit: acc.profit + (row.profit || 0)
+              }), { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0 });
+              totals.roi = totals.endCost > 0 ? (totals.profit / totals.endCost) * 100 : 0;
+              return { items, totals };
+          }
+          return result;
+      } catch (e) { 
+          console.error(e); 
+          return { items: [], totals: { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 } }; 
+      }
   },
 
   // --- Assets ---

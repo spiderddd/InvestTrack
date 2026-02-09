@@ -2,7 +2,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { StrategyVersion, MonthlyStatement, Position } from '@shared/types';
 import { StorageService } from '../services/storageService';
-import { getStrategyForDate } from '../utils/calculators';
 
 type ViewMode = 'strategy' | 'total';
 type TimeRange = 'all' | 'ytd' | '1y';
@@ -36,11 +35,13 @@ export const useDashboardData = (strategies: StrategyVersion[], statements: Mont
   }, [timeRange]);
 
   const activeStrategyEnd = useMemo(() => {
-      // Find the latest statement date from props to determine active strategy for labels
-      if (statements.length === 0) return null;
-      const sorted = [...statements].sort((a,b) => b.date.localeCompare(a.date));
-      return getStrategyForDate(strategies, sorted[0].date);
-  }, [strategies, statements]);
+      // Find the active strategy or the latest one
+      if (strategies.length === 0) return null;
+      const active = strategies.find(s => s.status === 'active');
+      if (active) return active;
+      // Sort by startDate descending and return the first one
+      return [...strategies].sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
+  }, [strategies]);
 
   // Fetch Data Effect - Optimized to single request
   useEffect(() => {
@@ -70,7 +71,9 @@ export const useDashboardData = (strategies: StrategyVersion[], statements: Mont
 
                 setAllocationData(allocation ?? []);
                 setHistoryData(trend ?? []);
-                setBreakdownData(breakdown ?? []);
+                // Handle new API format: { items, totals }
+                setBreakdownData(breakdown?.items ?? []);
+                setBreakdownTotals(breakdown?.totals ?? { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 });
             }
         } catch (error) {
             console.error("Failed to load dashboard data", error);
@@ -84,15 +87,8 @@ export const useDashboardData = (strategies: StrategyVersion[], statements: Mont
     return () => { isMounted = false; };
   }, [viewMode, timeRange, selectedLayerId, rangeConfig.startDate]);
 
-  const breakdownTotals = useMemo(() => {
-    return breakdownData.reduce((acc, row) => ({
-        endVal: acc.endVal + row.endVal,
-        endCost: acc.endCost + row.endCost,
-        changeVal: acc.changeVal + row.changeVal,
-        changeInput: acc.changeInput + row.changeInput,
-        profit: acc.profit + row.profit
-    }), { endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0 });
-  }, [breakdownData]);
+  // Use backend-provided totals instead of recalculating
+  const [breakdownTotals, setBreakdownTotals] = useState({ endVal: 0, endCost: 0, changeVal: 0, changeInput: 0, profit: 0, roi: 0 });
 
   // Determine start/end statement labels for UI (approximate from props is fine for labels)
   const uiStatements = useMemo(() => {

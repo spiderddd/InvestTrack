@@ -94,7 +94,8 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                                 {breakdownData.map((row: any) => {
-                                    const roi = row.endCost > 0 ? (row.profit / row.endCost) * 100 : 0;
+                                    // Use backend-calculated ROI
+                                    const roi = row.roi ?? (row.endCost > 0 ? (row.profit / row.endCost) * 100 : 0);
                                     return (
                                         <tr key={row.id} className="group hover:bg-slate-50 transition-colors">
                                             <td className="py-3 pl-1 truncate">
@@ -131,8 +132,9 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
                                         ) : '-'}
                                     </td>
                                     <td className="py-3 text-right">
+                                        {/* Use backend-calculated total ROI */}
                                         {(() => {
-                                            const totalRoi = breakdownTotals.endCost > 0 ? (breakdownTotals.profit / breakdownTotals.endCost) * 100 : 0;
+                                            const totalRoi = breakdownTotals.roi ?? (breakdownTotals.endCost > 0 ? (breakdownTotals.profit / breakdownTotals.endCost) * 100 : 0);
                                             return (
                                                 <div className={`font-bold ${breakdownTotals.profit >= 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                                                     {breakdownTotals.profit > 0 ? '+' : ''}{breakdownTotals.profit.toLocaleString()}
