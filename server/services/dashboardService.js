@@ -21,7 +21,14 @@ const getStrategyForDate = (versions, dateStr) => {
     const versionsToUse = activeVersions.length > 0 ? activeVersions : versions;
     
     const sorted = [...versionsToUse].sort((a, b) => b.startDate.localeCompare(a.startDate));
-    const targetDate = dateStr.length === 7 ? `${dateStr}-31` : dateStr;
+    let targetDate;
+    if (dateStr.length === 7) {
+        const [y, m] = dateStr.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        targetDate = `${dateStr}-${lastDay.toString().padStart(2, '0')}`;
+    } else {
+        targetDate = dateStr;
+    }
     return sorted.find(v => v.startDate <= targetDate) || sorted[sorted.length - 1]; 
 };
 
