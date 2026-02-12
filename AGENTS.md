@@ -237,6 +237,14 @@ const MyComponent: React.FC = () => {
 - Frontend hooks: `client/src/hooks/*.ts`
 - API services: `client/src/services/storageService.ts`
 
+### Temporary Documentation (`tmp_doc/`)
+The `tmp_doc/` folder contains working drafts, analysis documents, and temporary notes that are not part of the official documentation:
+
+- **Purpose**: Working space for analysis, calculations, and brainstorming documents
+- **Git**: This folder is gitignored and should never be committed to the repository
+- **Usage**: Place any draft documents, calculation notes, or temporary working files here
+- **Convention**: When you need to create documentation that is work-in-progress or for personal reference, always put it in `tmp_doc/` instead of the project root
+
 ## Important Concepts
 
 ### Monthly Statement (formerly Snapshot)

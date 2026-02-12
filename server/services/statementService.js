@@ -317,7 +317,7 @@ export const StatementService = {
             note: statement.note,
             totalValue,
             totalInvested,
-            positions: fullAssets
+            assets: fullAssets
         };
     },
 

@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "start": "node server/index.js",
     "seed": "node scripts/seed_data.js",
-    "import": "node scripts/import_data.js"
+    "import": "node scripts/import_data.js",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -32,7 +35,10 @@
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "jsdom": "^28.0.0",
     "typescript": "^5.9.3",
-    "vite": "^5.1.6"
+    "vite": "^5.1.6",
+    "vitest": "^4.0.18"
   }
 }

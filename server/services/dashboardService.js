@@ -2,6 +2,7 @@
 import { StatementService } from './statementService.js';
 import { StrategyService } from './strategyService.js';
 import { AssetService } from './assetService.js';
+import { getStrategyForDate, getAssetTargetMap } from '@shared/utils';
 
 // Helpers
 const CATEGORY_COLORS = {
@@ -12,38 +13,6 @@ const CATEGORY_COLORS = {
 };
 
 const LAYER_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#64748b'];
-
-const getStrategyForDate = (versions, dateStr) => {
-    if (!versions || versions.length === 0) return null;
-    
-    // Filter out archived strategies, prefer active ones
-    const activeVersions = versions.filter(v => v.status === 'active');
-    const versionsToUse = activeVersions.length > 0 ? activeVersions : versions;
-    
-    const sorted = [...versionsToUse].sort((a, b) => b.startDate.localeCompare(a.startDate));
-    let targetDate;
-    if (dateStr.length === 7) {
-        const [y, m] = dateStr.split('-').map(Number);
-        const lastDay = new Date(y, m, 0).getDate();
-        targetDate = `${dateStr}-${lastDay.toString().padStart(2, '0')}`;
-    } else {
-        targetDate = dateStr;
-    }
-    return sorted.find(v => v.startDate <= targetDate) || sorted[sorted.length - 1]; 
-};
-
-const getAssetTargetMap = (strategy) => {
-    const map = new Map();
-    if (!strategy || !strategy.layers) return map;
-    strategy.layers.forEach(layer => {
-        if(layer.items) {
-            layer.items.forEach(target => {
-                map.set(target.assetId, { target, layerId: layer.id });
-            });
-        }
-    });
-    return map;
-};
 
 export const DashboardService = {
     // Aggregated Endpoint to reduce network roundtrips
