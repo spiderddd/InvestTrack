@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 backup*
 data/
+
+# Documentation drafts
+BACKEND_CALCULATIONS.md
+CALCULATION_REVIEW.md
+FRONTEND_CALCULATIONS.md
