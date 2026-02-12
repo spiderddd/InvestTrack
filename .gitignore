@@ -25,7 +25,5 @@ dist-ssr
 backup*
 data/
 
-# Documentation drafts
-BACKEND_CALCULATIONS.md
-CALCULATION_REVIEW.md
-FRONTEND_CALCULATIONS.md
+# Temporary documentation folder
+tmp_doc/
