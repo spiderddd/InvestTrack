@@ -9,7 +9,6 @@
     "preview": "vite preview",
     "start": "tsx server/index.js",
     "seed": "node scripts/seed_data.js",
-    "import": "node scripts/import_data.js",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui"

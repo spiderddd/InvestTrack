@@ -69,10 +69,10 @@ export const useStatementForm = (
             if (existing) {
                 baseDate = existing.date;
                 baseNote = existing.note || '';
-                if (existing.positions) {
-                    initialRows = existing.positions.map((p: Position) => {
+                if (existing.assets) {
+                    initialRows = existing.assets.map((p: Position) => {
                         const realAsset = assets.find(def => def.id === p.assetId);
-                        const prevAsset = prevDetails?.positions?.find((pa: Position) => pa.assetId === p.assetId);
+                        const prevAsset = prevDetails?.assets?.find((pa: Position) => pa.assetId === p.assetId);
                         
                         const isSell = p.addedQuantity < 0 || p.addedPrincipal < 0;
 
@@ -120,7 +120,7 @@ export const useStatementForm = (
 
                     allTargets.forEach((item: StrategyTarget) => {
                         const realAsset = assets.find((a: Asset) => a.id === item.assetId);
-                        const prevAsset = prevDetails?.positions?.find((a: Position) => a.assetId === item.assetId);
+                        const prevAsset = prevDetails?.assets?.find((a: Position) => a.assetId === item.assetId);
 
                         // Use current price from API, fall back to prev statement price, then 0.0
                         const currentPrice = priceMap[item.assetId]?.price;
@@ -145,8 +145,8 @@ export const useStatementForm = (
                 }
 
                 // Add assets held in previous month but not in strategy
-                if (prevDetails && prevDetails.positions) {
-                    prevDetails.positions.forEach((p: Position) => {
+                if (prevDetails && prevDetails.assets) {
+                    prevDetails.assets.forEach((p: Position) => {
                         const alreadyAdded = initialRows.find(r => r.assetId === p.assetId);
                         if (!alreadyAdded) { 
                             const realAsset = assets.find(def => def.id === p.assetId);
@@ -262,7 +262,7 @@ export const useStatementForm = (
         return {
             id: selectedStatementId || generateId(),
             date,
-            positions: finalPositions,
+            assets: finalPositions,
             totalValue: totalVal,
             totalInvested: totalInv,
             note: note

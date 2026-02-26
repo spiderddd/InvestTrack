@@ -64,8 +64,8 @@ export const useAssetGrouping = (assets: Asset[], propsStatements: MonthlyStatem
   const assetPerformanceMap = useMemo(() => {
     const map = new Map<string, AssetPerformance>();
 
-    if (viewStatement && viewStatement.positions) {
-        viewStatement.positions.forEach((a: Position) => {
+    if (viewStatement && viewStatement.assets) {
+        viewStatement.assets.forEach((a: Position) => {
             if (a.quantity !== 0) { // Keep even if very small? Usually > 0 or < 0
                  map.set(a.assetId, {
                     quantity: a.quantity,

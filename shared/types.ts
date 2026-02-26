@@ -89,9 +89,9 @@ export interface MonthlyStatement {
   // Note: entries are calculated by summing all historical entries up to this date
 }
 
-// Extended MonthlyStatement with calculated positions (for API responses)
+// Extended MonthlyStatement with calculated assets (for API responses)
 export interface MonthlyStatementDetail extends MonthlyStatement {
-  positions?: Position[]; // Calculated positions at this period
+  assets?: Position[]; // Calculated assets/positions at this period
   totalValue: number;
   totalInvested: number;
 }

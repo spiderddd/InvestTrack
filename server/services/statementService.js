@@ -211,7 +211,7 @@ export const StatementService = {
             };
         }));
 
-        statement.positions = fullAssets;
+        statement.assets = fullAssets;
         return statement;
     },
 
@@ -223,14 +223,13 @@ export const StatementService = {
         let statementDate = date;
         
         if (isFullDate) {
-            // For YYYY-MM-DD, find the latest statement <= this date (compare YYYY-MM parts)
-            const monthPart = date.slice(0, 7);  // YYYY-MM
+            // For YYYY-MM-DD, find the latest statement <= this date
             const statementRows = await getQuery(
                 "SELECT id, date FROM monthly_statements WHERE date <= ? ORDER BY date DESC LIMIT 1",
-                [monthPart]
+                [date]
             );
             if (statementRows.length === 0) {
-                console.log(`[StatementService] No statement found <= ${monthPart}`);
+                console.log(`[StatementService] No statement found <= ${date}`);
                 return null;
             }
             statementDate = statementRows[0].date;
@@ -313,7 +312,7 @@ export const StatementService = {
             note: statement.note,
             totalValue,
             totalInvested,
-            positions: fullAssets
+            assets: fullAssets
         };
     },
 
