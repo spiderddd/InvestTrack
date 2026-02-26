@@ -139,4 +139,19 @@ router.get('/:id/history', validateParams(IdParamSchema), async (req, res) => {
     }
 });
 
+/**
+ * @route   GET /api/assets/:id/prices
+ * @desc    Get asset price trend data
+ * @access  Public
+ * @params  {string} id - Asset ID
+ */
+router.get('/:id/prices', validateParams(IdParamSchema), async (req, res) => {
+    try {
+        const data = await AssetService.getPrices(req.params.id);
+        sendSuccess(res, data, 'Asset prices retrieved successfully');
+    } catch (e) {
+        sendError(res, e, 'Asset Prices');
+    }
+});
+
 export default router;

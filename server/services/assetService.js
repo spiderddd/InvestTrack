@@ -202,6 +202,16 @@ export const AssetService = {
         );
     },
 
+    getPrices: async (assetId) => {
+        const rows = await getQuery(`
+            SELECT date, price, source
+            FROM market_prices
+            WHERE asset_id = ?
+            ORDER BY date ASC
+        `, [assetId]);
+        return rows;
+    },
+
     getLatestPrice: async (assetId) => {
         const rows = await getQuery(`
             SELECT price, date, source

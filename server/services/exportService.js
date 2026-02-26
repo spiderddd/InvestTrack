@@ -105,11 +105,11 @@ export const ExportService = {
             }
         }
 
-        for (const statement of monthly_statements) {
+        for (const statement of statements) {
             statement.transactions = dateToTransactions.get(statement.date) || [];
         }
 
-        return monthly_statements;
+        return statements;
     },
 
     async importBackup(data) {

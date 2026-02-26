@@ -59,6 +59,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
   // History View Modal State
   const [viewHistoryId, setViewHistoryId] = useState<string | null>(null);
   const [historyData, setHistoryData] = useState<AssetHistoryRecord[]>([]);
+  const [priceData, setPriceData] = useState<{date: string; price: number}[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   
   // Note View Modal State (Markdown Reader)
@@ -68,33 +69,36 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
   useEffect(() => {
     if (viewHistoryId) {
         setLoadingHistory(true);
-        StorageService.getAssetHistory(viewHistoryId)
-            .then(data => {
-                // Backend now returns pre-processed statement history.
-                // We just need to compute client-side derived fields (ROI, Profit) for display.
-                const formatted: AssetHistoryRecord[] = data.map((row: any) => ({
-                    date: row.date,
-                    unitPrice: row.unitPrice,
-                    quantity: row.quantity,
-                    marketValue: row.marketValue,
-                    totalCost: row.totalCost,
-                    profit: row.marketValue - row.totalCost,
-                    roi: row.totalCost > 0 ? ((row.marketValue - row.totalCost) / row.totalCost * 100) : 0,
-                    addedQuantity: row.addedQuantity,
-                    addedPrincipal: row.addedPrincipal,
-                    note: row.note || ''
-                }));
-                
-                // Ensure Sorted by Date
-                setHistoryData(formatted.sort((a: AssetHistoryRecord, b: AssetHistoryRecord) => a.date.localeCompare(b.date)));
-            })
-            .catch(err => {
-                console.error("Failed to load history", err);
-                setHistoryData([]);
-            })
-            .finally(() => setLoadingHistory(false));
+        
+        Promise.all([
+            StorageService.getAssetHistory(viewHistoryId),
+            StorageService.getAssetPrices(viewHistoryId)
+        ]).then(([history, prices]) => {
+            const formatted: AssetHistoryRecord[] = history.map((row: any) => ({
+                date: row.date,
+                unitPrice: row.unitPrice,
+                quantity: row.quantity,
+                marketValue: row.marketValue,
+                totalCost: row.totalCost,
+                profit: row.marketValue - row.totalCost,
+                roi: row.totalCost > 0 ? ((row.marketValue - row.totalCost) / row.totalCost * 100) : 0,
+                addedQuantity: row.addedQuantity,
+                addedPrincipal: row.addedPrincipal,
+                note: row.note || ''
+            }));
+            
+            setHistoryData(formatted.sort((a: AssetHistoryRecord, b: AssetHistoryRecord) => a.date.localeCompare(b.date)));
+            setPriceData(prices.map((p: any) => ({ date: p.date, price: p.price })));
+        })
+        .catch(err => {
+            console.error("Failed to load history", err);
+            setHistoryData([]);
+            setPriceData([]);
+        })
+        .finally(() => setLoadingHistory(false));
     } else {
         setHistoryData([]);
+        setPriceData([]);
     }
   }, [viewHistoryId]);
 
@@ -502,7 +506,7 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                                     <div className="text-xs text-slate-500 mb-1">最近单价</div>
                                     <div className="text-xl font-bold text-slate-800 font-mono">
-                                        ¥{historyData[historyData.length - 1]!.unitPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                                        ¥{priceData.length > 0 ? priceData[priceData.length - 1]!.price.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '0'}
                                     </div>
                                 </div>
                             </div>
@@ -542,12 +546,12 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
                                     </h4>
                                     <div className="h-64">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <LineChart data={historyData}>
+                                            <LineChart data={priceData}>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                                 <XAxis dataKey="date" tick={{fontSize:10}} tickLine={false} axisLine={false} />
                                                 <YAxis tick={{fontSize:10}} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
                                                 <RechartsTooltip />
-                                                <Line type="stepAfter" dataKey="unitPrice" name="单价" stroke="#3b82f6" strokeWidth={2} dot={{r:3}} />
+                                                <Line type="stepAfter" dataKey="price" name="单价" stroke="#3b82f6" strokeWidth={2} dot={{r:3}} />
                                             </LineChart>
                                         </ResponsiveContainer>
                                     </div>

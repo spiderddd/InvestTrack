@@ -141,6 +141,15 @@ export const StorageService = {
     } catch (e) { console.error(e); return []; }
   },
 
+  getAssetPrices: async (assetId: string): Promise<any[]> => {
+    try {
+        const res = await fetch(`${API_BASE}/assets/${assetId}/prices`);
+        if (!res.ok) throw new Error('Failed to fetch asset prices');
+        const data = await res.json();
+        return data.data || [];
+    } catch (e) { console.error(e); return []; }
+  },
+
   // --- Strategies ---
   getStrategyVersions: async (): Promise<StrategyVersion[]> => {
     try {
