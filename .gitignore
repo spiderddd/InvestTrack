@@ -27,3 +27,6 @@ data/
 
 # Temporary documentation folder
 tmp_doc/
+
+# Package lock
+package-lock.json

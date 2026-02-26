@@ -69,17 +69,13 @@ export const StatementService = {
 
     // Optimized: Get nearest previous statement without fetching full history list
     getPrevious: async (date) => {
-        const sql = `
-            SELECT id, date, note
-            FROM monthly_statements
-            WHERE date < ?
-            ORDER BY date DESC
-            LIMIT 1
-        `;
-        const rows = await getQuery(sql, [date]);
+        const monthPart = date.slice(0, 7);
+        const rows = await getQuery(
+            "SELECT id, date, note FROM monthly_statements WHERE date < ? ORDER BY date DESC LIMIT 1",
+            [monthPart]
+        );
         if (rows.length === 0) return null;
         
-        // Hydrate with details for the 'copy from previous' feature
         return await StatementService.getDetails(rows[0].id);
     },
 
@@ -215,7 +211,7 @@ export const StatementService = {
             };
         }));
 
-        statement.assets = fullAssets;
+        statement.positions = fullAssets;
         return statement;
     },
 
@@ -313,11 +309,11 @@ export const StatementService = {
 
         return {
             id: statementId,
-            date: date,
+            date: statement.date,
             note: statement.note,
             totalValue,
             totalInvested,
-            assets: fullAssets
+            positions: fullAssets
         };
     },
 

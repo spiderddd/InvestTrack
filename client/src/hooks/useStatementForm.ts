@@ -53,13 +53,13 @@ export const useStatementForm = (
 
             const refDate = existing ? existing.date : baseDate;
             
-            // Optimization: Fetch previous statement specifically from backend
+            // Optimization: Fetch previous statement (strictly before current month)
             try {
                 const res = await fetch(`/api/statements/previous/${refDate}`);
                 if (res.ok) {
                     const prevData = await res.json();
-                    if (prevData && prevData.id) {
-                        prevDetails = prevData;
+                    if (prevData && prevData.data && prevData.data.id) {
+                        prevDetails = prevData.data;
                     }
                 }
             } catch (err) {
