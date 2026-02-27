@@ -88,8 +88,8 @@ export const AssetService = {
         return { success: true };
     },
 
-    // New: Get prices for multiple assets
-    getPrices: async (assetIds) => {
+    // Get latest prices for multiple assets
+    getLatestPrices: async (assetIds) => {
         if (!assetIds || assetIds.length === 0) return {};
 
         const placeholders = assetIds.map(() => '?').join(',');

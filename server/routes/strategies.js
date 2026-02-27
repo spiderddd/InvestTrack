@@ -90,7 +90,7 @@ const VersionUpdateSchema = z.object({
     description: z.string().optional(),
     startDate: z.string().optional(),
     status: z.enum(['active', 'archived']).optional(),
-    archivedAt: z.string().optional()
+    archivedAt: z.string().nullish()
 });
 
 router.put('/:id/version', validateParams(IdParamSchema), validateBody(VersionUpdateSchema), async (req, res) => {

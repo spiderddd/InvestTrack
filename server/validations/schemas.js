@@ -99,7 +99,8 @@ export const PositionSchema = z.object({
  */
 export const MonthlyStatementSchema = z.object({
   id: IdSchema.optional(),
-  period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
+  period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format').optional(),
   assets: z.array(PositionSchema).optional(),
   totalValue: z.number().min(0),
   totalInvested: z.number().min(0),

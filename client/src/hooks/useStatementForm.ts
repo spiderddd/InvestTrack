@@ -26,7 +26,8 @@ export const useStatementForm = (
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
-        return `${year}-${month}-01`;
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     });
     const [note, setNote] = useState('');
     const [rows, setRows] = useState<AssetRowInput[]>([]);
@@ -38,7 +39,8 @@ export const useStatementForm = (
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
-        let baseDate = `${year}-${month}-01`;
+        const day = String(now.getDate()).padStart(2, '0');
+        let baseDate = `${year}-${month}-${day}`;
         let baseNote = '';
         let initialRows: AssetRowInput[] = [];
 
@@ -104,7 +106,7 @@ export const useStatementForm = (
                     let priceMap: Record<string, { price: number; date: string }> = {};
                     if (strategyAssetIds.length > 0) {
                         try {
-                            const priceRes = await fetch('/api/assets/prices', {
+                            const priceRes = await fetch('/api/assets/latest_prices', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ assetIds: strategyAssetIds })
@@ -195,12 +197,33 @@ export const useStatementForm = (
         setRows(newRows);
     };
 
-    const addAssetRow = (asset: Asset) => {
+    const addAssetRow = async (asset: Asset) => {
         if (rows.find(r => r.assetId === asset.id)) {
             alert("该资产已在列表中");
             return;
         }
         const isCashLike = asset.type === 'fixed' || asset.type === 'wealth';
+        
+        let fetchedPrice = '';
+        if (!isCashLike) {
+            try {
+                const priceRes = await fetch('/api/assets/latest_prices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assetIds: [asset.id] })
+                });
+                if (priceRes.ok) {
+                    const parsed = await priceRes.json();
+                    const priceData = parsed.data?.[asset.id];
+                    if (priceData && priceData.price !== undefined && priceData.price !== null && priceData.price > 0) {
+                        fetchedPrice = priceData.price.toString();
+                    }
+                }
+            } catch (err) {
+                console.warn("Failed to fetch asset price", err);
+            }
+        }
+
         setRows([
             ...rows,
             {
@@ -208,7 +231,7 @@ export const useStatementForm = (
                 assetId: asset.id,
                 name: asset.name,
                 category: asset.type,
-                price: isCashLike ? '1' : '',
+                price: isCashLike ? '1' : fetchedPrice,
                 transactionType: 'buy',
                 quantityChange: '',
                 costChange: '',

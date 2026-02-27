@@ -67,6 +67,19 @@ export const StatementService = {
         return rows.map(r => r.date);
     },
 
+    // Get asset IDs from active strategy
+    getActiveStrategyAssetIds: async () => {
+        const result = await getQuery(`
+            SELECT DISTINCT asset_id FROM strategy_targets 
+            WHERE layer_id IN (
+                SELECT id FROM strategy_layers WHERE version_id = (
+                    SELECT id FROM strategy_versions WHERE status = 'active'
+                )
+            )
+        `);
+        return result.map(r => r.asset_id);
+    },
+
     // Optimized: Get nearest previous statement without fetching full history list
     getPrevious: async (date) => {
         const monthPart = date.slice(0, 7);
@@ -161,17 +174,37 @@ export const StatementService = {
         statement.totalValue = totals.totalValue;
         statement.totalInvested = totals.totalInvested;
 
-        const holdingsSql = `
-            SELECT 
-                t.asset_id as assetId,
-                SUM(t.quantity_change) as quantity,
-                SUM(t.cost_change) as totalCost
-            FROM transactions t
-            WHERE t.date <= ?
-            GROUP BY t.asset_id
-            HAVING quantity != 0
-        `;
-        const holdings = await getQuery(holdingsSql, [statementDate]);
+        // Get assets: transactions in this month + active strategy assets
+        const statementMonth = statementDate.substring(0, 7);
+        
+        // Assets with transactions in this statement month
+        const monthAssetIds = await getQuery(
+            `SELECT DISTINCT asset_id FROM transactions WHERE date LIKE ?`,
+            [statementMonth + '%']
+        );
+        const transactionAssetIds = new Set(monthAssetIds.map(a => a.asset_id));
+
+        // Assets from active strategy
+        const strategyAssetIds = new Set(await StatementService.getActiveStrategyAssetIds());
+
+        // Merge both lists
+        const allAssetIds = [...new Set([...transactionAssetIds, ...strategyAssetIds])];
+
+        // Calculate holdings up to the statement date
+        let holdings = [];
+        if (allAssetIds.length > 0) {
+            const placeholders = allAssetIds.map(() => '?').join(',');
+            const holdingsSql = `
+                SELECT 
+                    t.asset_id as assetId,
+                    SUM(t.quantity_change) as quantity,
+                    SUM(t.cost_change) as totalCost
+                FROM transactions t
+                WHERE t.date <= ? AND t.asset_id IN (${placeholders})
+                GROUP BY t.asset_id
+            `;
+            holdings = await getQuery(holdingsSql, [statementDate, ...allAssetIds]);
+        }
 
         // Fetch Note as well
         const flowSql = `SELECT asset_id, quantity_change, cost_change, note FROM transactions WHERE statement_id = ?`;
@@ -246,19 +279,37 @@ export const StatementService = {
         const statement = headerRows[0];
         const statementId = statement.id;
         
+        // Get assets: transactions in this month + active strategy assets
+        const statementMonth = statementDate.substring(0, 7);
+        
+        // Assets with transactions in this statement month
+        const monthAssetIds = await getQuery(
+            `SELECT DISTINCT asset_id FROM transactions WHERE date LIKE ?`,
+            [statementMonth + '%']
+        );
+        const transactionAssetIds = new Set(monthAssetIds.map(a => a.asset_id));
+
+        // Assets from active strategy
+        const strategyAssetIds = new Set(await StatementService.getActiveStrategyAssetIds());
+
+        // Merge both lists
+        const allAssetIds = [...new Set([...transactionAssetIds, ...strategyAssetIds])];
+
         // Calculate holdings up to the target date
-        const holdingsSql = `
-            SELECT 
-                t.asset_id as assetId,
-                SUM(t.quantity_change) as quantity,
-                SUM(t.cost_change) as totalCost
-            FROM transactions t
-            WHERE t.date <= ?
-            GROUP BY t.asset_id
-            HAVING ABS(quantity) > 0.000001
-        `;
-        const holdings = await getQuery(holdingsSql, [date]);
-        console.log(`[StatementService] Holdings count for ${date}: ${holdings.length}`);
+        let holdings = [];
+        if (allAssetIds.length > 0) {
+            const placeholders = allAssetIds.map(() => '?').join(',');
+            const holdingsSql = `
+                SELECT 
+                    t.asset_id as assetId,
+                    SUM(t.quantity_change) as quantity,
+                    SUM(t.cost_change) as totalCost
+                FROM transactions t
+                WHERE t.date <= ? AND t.asset_id IN (${placeholders})
+                GROUP BY t.asset_id
+            `;
+            holdings = await getQuery(holdingsSql, [date, ...allAssetIds]);
+        }
 
         // Get statement-specific transactions for note/flow tracking (only for month view)
         let flowMap = new Map();
