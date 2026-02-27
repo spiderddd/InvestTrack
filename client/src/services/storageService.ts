@@ -1,5 +1,5 @@
 
-import { StrategyVersion, MonthlyStatement, Asset, MonthlyStatementDetail } from '@shared/types';
+import { StrategyVersion, MonthlyStatement, Asset, MonthlyStatementDetail, Holdings } from '@shared/types';
 
 const API_BASE = '/api';
 
@@ -326,11 +326,11 @@ export const StorageService = {
     } catch (e) { console.error(e); return []; }
   },
 
-  // New: Get Details by Date (For Asset Manager "Time Travel")
-  getMonthlyStatementByDate: async (date: string): Promise<MonthlyStatementDetail | null> => {
+  // New: Get Holdings by Date (For Asset Manager "Time Travel")
+  getHoldingsByDate: async (date: string): Promise<Holdings | null> => {
       try {
-          const res = await fetch(`${API_BASE}/statements/details-by-date?date=${date}`);
-          if (!res.ok) throw new Error('Failed to fetch statement details by date');
+          const res = await fetch(`${API_BASE}/assets/holdings-by-date?date=${date}`);
+          if (!res.ok) throw new Error('Failed to fetch holdings by date');
           const data = await res.json();
           return data.data || null;
       } catch (e) { console.error(e); return null; }

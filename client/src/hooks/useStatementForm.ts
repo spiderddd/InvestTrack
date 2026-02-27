@@ -76,7 +76,9 @@ export const useStatementForm = (
                         const realAsset = assets.find(def => def.id === p.assetId);
                         const prevAsset = prevDetails?.assets?.find((pa: Position) => pa.assetId === p.assetId);
                         
-                        const isSell = p.addedQuantity < 0 || p.addedPrincipal < 0;
+                        const addedQ = p.addedQuantity ?? 0;
+                        const addedC = p.addedPrincipal ?? 0;
+                        const isSell = addedQ < 0 || addedC < 0;
 
                         return {
                             recordId: p.id,
@@ -85,10 +87,10 @@ export const useStatementForm = (
                             category: realAsset ? realAsset.type : p.category, 
                             price: p.unitPrice.toString(),
                             transactionType: isSell ? 'sell' : 'buy',
-                            quantityChange: Math.abs(p.addedQuantity).toString(),
-                            costChange: Math.abs(p.addedPrincipal).toString(),
-                            prevQuantity: prevAsset ? prevAsset.quantity : (p.quantity - p.addedQuantity),
-                            prevCost: prevAsset ? prevAsset.totalCost : (p.totalCost - p.addedPrincipal),
+                            quantityChange: Math.abs(addedQ).toString(),
+                            costChange: Math.abs(addedC).toString(),
+                            prevQuantity: prevAsset ? prevAsset.quantity : (p.quantity - addedQ),
+                            prevCost: prevAsset ? prevAsset.totalCost : (p.totalCost - addedC),
                             note: p.note || ''
                         };
                     });

@@ -51,6 +51,21 @@ export const AssetService = {
         const { name, type, ticker, note } = data;
         if (!name || !type) throw { statusCode: 400, message: "Name and Type required" };
 
+        // Check for duplicate by name or ticker
+        const existing = await getQuery(
+            "SELECT id, name, ticker FROM assets WHERE name = ? OR (ticker = ? AND ticker IS NOT NULL AND ticker != '')",
+            [name, ticker]
+        );
+        if (existing.length > 0) {
+            const existingAsset = existing[0];
+            if (existingAsset.name === name) {
+                throw { statusCode: 409, message: "同名资产已存在" };
+            }
+            if (ticker && existingAsset.ticker === ticker) {
+                throw { statusCode: 409, message: `代码为 ${ticker} 的资产已存在` };
+            }
+        }
+
         const id = uuidv4();
         const now = Date.now();
         await runQuery(

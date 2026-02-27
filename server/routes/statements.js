@@ -26,9 +26,6 @@ const router = express.Router();
 // Schema for ID parameter validation
 const IdParamSchema = z.object({ id: z.string().min(1) });
 
-// Schema for date query parameter validation (supports YYYY-MM-DD format)
-const DateQuerySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format') });
-
 /**
  * @route   GET /api/statements
  * @desc    Get list of statements with pagination
@@ -105,23 +102,6 @@ router.get('/previous/:date', validateParams(z.object({ date: z.string().regex(/
         sendSuccess(res, data || {}, data ? 'Previous statement retrieved' : 'No previous statement found');
     } catch (e) { 
         sendError(res, e, 'Get Previous Statement'); 
-    }
-});
-
-/**
- * @route   GET /api/statements/details-by-date
- * @desc    Get statement details by date
- * @access  Public
- * @query   {string} date - Date in YYYY-MM-DD format
- * @returns {Object} Statement details or null if not found
- */
-router.get('/details-by-date', validateQuery(DateQuerySchema), async (req, res) => {
-    try {
-        const { date } = req.query;
-        const data = await StatementService.getDetailsByPeriod(date);
-        sendSuccess(res, data, data ? 'Statement details retrieved' : 'No statement found for this date');
-    } catch (e) { 
-        sendError(res, e, 'Get Statement By Date'); 
     }
 });
 

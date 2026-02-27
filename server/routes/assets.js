@@ -14,14 +14,33 @@
 
 import express from 'express';
 import { AssetService } from '../services/assetService.js';
+import { AssetService as HoldingsService } from '../services/assetsService.js';
 import { sendSuccess, sendCreated, sendError } from '../utils/responseHelper.js';
-import { validateBody, validateParams } from '../validations/middleware.js';
+import { validateBody, validateParams, validateQuery } from '../validations/middleware.js';
 import { AssetSchema, AssetUpdateSchema, PriceUpdateSchema } from '../validations/schemas.js';
 import { z } from 'zod';
 
 const router = express.Router();
 
 const IdParamSchema = z.object({ id: z.string().min(1) });
+const DateQuerySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format') });
+
+/**
+ * @route   GET /api/assets/holdings-by-date
+ * @desc    Get asset holdings up to a specific date
+ * @access  Public
+ * @query   {string} date - Date in YYYY-MM-DD format
+ * @returns {Object} Holdings with quantity, totalCost, and latest unitPrice
+ */
+router.get('/holdings-by-date', validateQuery(DateQuerySchema), async (req, res) => {
+    try {
+        const { date } = req.query;
+        const data = await HoldingsService.getHoldingsByDate(date);
+        sendSuccess(res, data, 'Holdings retrieved successfully');
+    } catch (e) {
+        sendError(res, e, 'Get Holdings By Date');
+    }
+});
 
 /**
  * @route   GET /api/assets

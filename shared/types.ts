@@ -64,21 +64,27 @@ export interface Position {
   // History
   totalCost: number;
   
-  // Flow (monthly changes)
-  addedPrincipal: number;
-  addedQuantity: number;
+  // Flow (monthly changes) - Optional, for backwards compatibility
+  addedPrincipal?: number;
+  addedQuantity?: number;
   
-  // Transaction Note
+  // Transaction Note - Optional
   note?: string; 
 }
 
-// StatementEntry - Stored in database, represents monthly net adjustment for one asset
-export interface StatementEntry {
+// Holdings - Simple asset holdings for time-travel feature
+export interface HoldingsItem {
   assetId: string;
-  statementId: string;
-  quantityAdjustment: number; // Monthly net change (+buy/-sell)
-  costAdjustment: number;     // Monthly net cost change (+invest/-withdraw)
-  note?: string;
+  name: string;
+  category: AssetCategory;
+  quantity: number;
+  totalCost: number;
+  unitPrice: number;
+}
+
+export interface Holdings {
+  date: string;
+  assets: HoldingsItem[];
 }
 
 // MonthlyStatement - Header record for monthly adjustments

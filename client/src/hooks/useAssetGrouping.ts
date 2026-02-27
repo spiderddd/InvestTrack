@@ -1,6 +1,6 @@
 
 import { useState, useMemo, useEffect } from 'react';
-import { Asset, MonthlyStatement, MonthlyStatementDetail, StrategyVersion, AssetCategory, Position, StrategyLayer, StrategyTarget } from '@shared/types';
+import { Asset, MonthlyStatement, StrategyVersion, AssetCategory, StrategyLayer, StrategyTarget, Holdings, HoldingsItem } from '@shared/types';
 import { Layers, HelpCircle, TrendingUp, Briefcase, Landmark, Coins, Wallet } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
@@ -33,16 +33,16 @@ export const useAssetGrouping = (assets: Asset[], propsStatements: MonthlyStatem
 
   // States to hold server-fetched data
   const [availableDates, setAvailableDates] = useState<string[]>([]);
-  const [viewStatement, setViewStatement] = useState<MonthlyStatementDetail | null>(null);
+  const [viewHoldings, setViewHoldings] = useState<Holdings | null>(null);
 
   // 1. Fetch available dates (Lightweight)
   useEffect(() => {
     StorageService.getMonthlyStatementDates().then(dates => setAvailableDates(dates));
   }, []);
 
-  // 2. Fetch statement details when date changes (On-Demand Calculation)
+  // 2. Fetch holdings when date changes (On-Demand Calculation)
   useEffect(() => {
-    const fetchStatement = async () => {
+    const fetchHoldings = async () => {
       let targetDate = selectedDate;
 
       if (selectedDate === 'latest') {
@@ -50,36 +50,35 @@ export const useAssetGrouping = (assets: Asset[], propsStatements: MonthlyStatem
         targetDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
       }
 
-      const details = await StorageService.getMonthlyStatementByDate(targetDate);
-      setViewStatement(details);
+      const holdings = await StorageService.getHoldingsByDate(targetDate);
+      setViewHoldings(holdings);
     };
-    fetchStatement();
+    fetchHoldings();
   }, [selectedDate, propsStatements]);
 
   const activeStrategy = useMemo(() => {
       return strategies.find(s => s.status === 'active') || strategies[strategies.length - 1];
   }, [strategies]);
 
-  // Optimized: Map directly from the fetched single statement, no more client-side history traversal
+  // Optimized: Map directly from the fetched holdings
   const assetPerformanceMap = useMemo(() => {
     const map = new Map<string, AssetPerformance>();
 
-    if (viewStatement && viewStatement.assets) {
-        viewStatement.assets.forEach((a: Position) => {
-            if (a.quantity !== 0) { // Keep even if very small? Usually > 0 or < 0
-                 map.set(a.assetId, {
+    if (viewHoldings && viewHoldings.assets) {
+        viewHoldings.assets.forEach((a: HoldingsItem) => {
+             const marketValue = a.quantity * a.unitPrice;
+             map.set(a.assetId, {
                     quantity: a.quantity,
-                    marketValue: a.marketValue,
+                    marketValue: marketValue,
                     totalCost: a.totalCost,
                     unitPrice: a.unitPrice,
-                     date: viewStatement.date,
+                    date: viewHoldings.date,
                     isHistorical: selectedDate !== 'latest'
                 });
-            }
         });
     }
     return map;
-  }, [viewStatement, selectedDate]);
+  }, [viewHoldings, selectedDate]);
 
   const displaySections = useMemo(() => {
     let sections: any[] = [];

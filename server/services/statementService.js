@@ -129,7 +129,6 @@ export const StatementService = {
             let totalValue = 0;
             let totalInvested = 0;
             for (const [assetId, state] of runningState.entries()) {
-                if (Math.abs(state.quantity) < 0.000001) continue;
                 const assetPrices = pricesByAsset.get(assetId) || [];
                 let price = 0;
                 for (let i = assetPrices.length - 1; i >= 0; i--) {
@@ -174,15 +173,12 @@ export const StatementService = {
         statement.totalValue = totals.totalValue;
         statement.totalInvested = totals.totalInvested;
 
-        // Get assets: transactions in this month + active strategy assets
-        const statementMonth = statementDate.substring(0, 7);
-        
-        // Assets with transactions in this statement month
-        const monthAssetIds = await getQuery(
-            `SELECT DISTINCT asset_id FROM transactions WHERE date LIKE ?`,
-            [statementMonth + '%']
+        // Get ALL assets with transactions up to the statement date (not just current month)
+        const allAssetIdsResult = await getQuery(
+            `SELECT DISTINCT asset_id FROM transactions WHERE date <= ?`,
+            [statementDate]
         );
-        const transactionAssetIds = new Set(monthAssetIds.map(a => a.asset_id));
+        const transactionAssetIds = new Set(allAssetIdsResult.map(a => a.asset_id));
 
         // Assets from active strategy
         const strategyAssetIds = new Set(await StatementService.getActiveStrategyAssetIds());
@@ -282,12 +278,12 @@ export const StatementService = {
         // Get assets: transactions in this month + active strategy assets
         const statementMonth = statementDate.substring(0, 7);
         
-        // Assets with transactions in this statement month
-        const monthAssetIds = await getQuery(
-            `SELECT DISTINCT asset_id FROM transactions WHERE date LIKE ?`,
-            [statementMonth + '%']
+        // Get ALL assets with transactions up to the statement date (not just current month)
+        const allAssetIdsResult = await getQuery(
+            `SELECT DISTINCT asset_id FROM transactions WHERE date <= ?`,
+            [date]
         );
-        const transactionAssetIds = new Set(monthAssetIds.map(a => a.asset_id));
+        const transactionAssetIds = new Set(allAssetIdsResult.map(a => a.asset_id));
 
         // Assets from active strategy
         const strategyAssetIds = new Set(await StatementService.getActiveStrategyAssetIds());
