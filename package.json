@@ -11,7 +11,9 @@
     "seed": "node scripts/seed_data.js",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:record": "cp data_bak/invest_track_v2.db data_test/ && DB_PATH=./data_test/invest_track_v2.db RECORD_MODE=true vitest run tests/integration/api-regression.test.js",
+    "test:regression": "cp data_bak/invest_track_v2.db data_test/ && DB_PATH=./data_test/invest_track_v2.db vitest run tests/integration/api-regression.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

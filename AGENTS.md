@@ -15,7 +15,15 @@ npm run typecheck        # TypeScript type checking only (no emit)
 
 # Data Management
 npm run seed             # Generate test data (7 assets, 1 strategy, 6 months)
-npm run import           # Import data from backup file
+
+# Testing
+npm run test             # Run unit tests with Vitest
+npm run test:coverage    # Run tests with coverage report
+npm run test:ui          # Run tests with UI browser
+
+# Regression Testing (REQUIRED before any code change)
+npm run test:record      # Record API snapshots (set RECORD_MODE=true)
+npm run test:regression  # Run regression test after code change
 
 # Docker
 docker build -t invest-track .    # Build Docker image
@@ -258,9 +266,96 @@ The system uses **Monthly Statements** to record investment adjustments:
 A Position represents a holding at a specific point in time:
 - `quantity`: Current holdings
 - `totalCost`: Accumulated cost (can be negative for realized gains)
-- `marketValue`: Current market value (quantity × current price)
+- `marketValue`: Current market value (quantity × price)
+
+### Holdings Data Flow
+The asset library fetches holdings data through this chain:
+1. **Backend**: `server/routes/assets.js` → `server/services/assetsService.js`
+2. **API**: `GET /api/assets/holdings-by-date?date=YYYY-MM-DD`
+3. **Frontend Service**: `client/src/services/storageService.getHoldingsByDate()`
+4. **Hook**: `client/src/hooks/useAssetGrouping.ts` - manages filtering, grouping, search
+5. **Component**: `client/src/components/AssetManager.tsx` - renders asset cards
+
+### Asset States in AssetManager
+- **isHeld**: `quantity > 0` - currently holding
+- **isCleared**: `quantity === 0 && totalCost !== 0` - sold out but has profit/loss
+- **isHistorical**: `selectedDate !== 'latest'` - viewing historical snapshot
 
 ## Database
 - SQLite database at `data/invest_track_v2.db`
 - Use `server/db.js` for database operations
 - Backup by copying the database file
+
+## Regression Testing (IMPORTANT)
+
+### Overview
+Before making ANY code changes, you MUST run regression tests to ensure the existing functionality remains intact. This prevents regressions and validates that your changes don't break existing features.
+
+### Workflow
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│ Step 1: Record Baseline (BEFORE any code changes)             │
+│   1. Start server: npm start                                   │
+│   2. Run: npm run test:record                                 │
+│   3. Snapshot saved to: snapshots/api-responses.json          │
+└────────────────────────────────────────────────────────────────┘
+                              ↓
+┌────────────────────────────────────────────────────────────────┐
+│ Step 2: Make Code Changes                                      │
+│   - Modify the code as needed                                  │
+│   - DO NOT run test:record again                               │
+└────────────────────────────────────────────────────────────────┘
+                              ↓
+┌────────────────────────────────────────────────────────────────┐
+│ Step 3: Run Regression Test (AFTER code changes)              │
+│   1. Start server: npm start                                   │
+│   2. Run: npm run test:regression                              │
+│   3. Check results: All 20 APIs should pass                   │
+└────────────────────────────────────────────────────────────────
+```
+
+### Test Coverage
+The regression test covers 20 API endpoints:
+- **Assets**: list, holdings-by-date, latest-prices
+- **Statements**: list, pagination, dates, history, previous, detail, recalculate
+- **Strategies**: list
+- **Prices**: gold, status
+- **Dashboard**: overview, metrics, allocation, trend, breakdown
+- **Export**: backup
+
+### How It Works
+1. **Record Mode** (`--record`): Calls all APIs and saves responses to `snapshots/api-responses.json`
+2. **Regression Mode**: Calls all APIs and compares with saved snapshots
+   - Automatically ignores dynamic fields: `timestamp`, `createdAt`, `updatedAt`, etc.
+   - Allows floating-point tolerance: ±0.001
+
+### Adding New APIs
+To add new APIs to the regression test, edit `tests/integration/api-regression.test.js` and add entries to the `API_ENDPOINTS` array:
+
+```javascript
+const API_ENDPOINTS = [
+  // Add new endpoint here
+  { method: 'GET', path: '/api/your-new-endpoint', name: 'your-name' },
+];
+```
+
+### Data Management
+- **data_bak/**: Backup data (read-only, used as source for tests)
+- **data_test/**: Test data (auto-generated, gitignored)
+- **snapshots/**: API response snapshots (gitignored)
+
+### If Tests Fail
+When regression tests fail, you'll see:
+```
+✗ dashboard-metrics
+  FAIL: 检测到 2 个差异
+  [
+    { path: 'data.endValue', actual: 100000, expected: 99999.5 },
+    ...
+  ]
+```
+
+Analyze the differences:
+- **Expected difference**: Your code change intentionally modified behavior → Update snapshot with `npm run test:record`
+- **Unexpected difference**: Your code change accidentally broke something → Fix your code

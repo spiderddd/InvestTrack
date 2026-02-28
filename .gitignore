@@ -24,6 +24,9 @@ dist-ssr
 *.sw?
 backup*
 data/
+data_bak/
+data_test/
+snapshots/
 
 # Temporary documentation folder
 tmp_doc/
