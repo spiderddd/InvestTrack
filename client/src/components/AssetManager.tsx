@@ -149,7 +149,12 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
     const meta = getCategoryMeta(asset.type);
     const Icon = meta.icon;
     const status = assetPerformanceMap.get(asset.id);
-    const isHeld = !!status && !status.isHistorical; 
+    
+    const hasHolding = !!status;
+    const quantity = status ? status.quantity : 0;
+    const isHeld = hasHolding && quantity > 0;
+    const isCleared = hasHolding && quantity === 0 && status.totalCost !== 0;
+    const isHistorical = status ? status.isHistorical : false;
     
     const marketValue = status ? status.marketValue : 0;
     const totalCost = status ? status.totalCost : 0;
@@ -167,6 +172,8 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
         className={`bg-white rounded-xl border transition-all duration-200 group relative flex flex-col justify-between
           ${isHeld 
             ? 'border-slate-200 shadow-sm hover:shadow-md' 
+            : isCleared
+            ? 'border-slate-200 border-l-4 border-l-amber-400 shadow-sm hover:shadow-md'
             : 'border-slate-100 bg-slate-50 opacity-60 hover:opacity-100 hover:shadow-sm'
           }`}
         onClick={() => setViewHistoryId(asset.id)}
@@ -175,11 +182,11 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
             {/* Header: Identity */}
             <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl shrink-0 ${isHeld ? meta.color : 'bg-slate-200 text-slate-400 grayscale'}`}>
+                    <div className={`p-2.5 rounded-xl shrink-0 ${isHeld ? meta.color : (isCleared ? 'bg-amber-50 text-amber-600' : 'bg-slate-200 text-slate-400 grayscale')}`}>
                         <Icon size={22} />
                     </div>
                     <div className="overflow-hidden">
-                        <h3 className={`font-bold text-base leading-tight truncate ${isHeld ? 'text-slate-800' : 'text-slate-600'}`} title={asset.name}>
+                        <h3 className={`font-bold text-base leading-tight truncate ${isHeld ? 'text-slate-800' : (isCleared ? 'text-slate-700' : 'text-slate-600')}`} title={asset.name}>
                             {asset.name}
                         </h3>
                         <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
@@ -208,33 +215,42 @@ export const AssetManager: React.FC<AssetManagerProps> = ({ assets, monthlyState
                  <div className="text-[11px] font-medium text-slate-400 mb-0.5 uppercase tracking-wider flex items-center gap-2">
                     {isHeld 
                         ? '当前市值' 
-                        : (status ? `清仓市值 (${status.date})` : '暂无持仓')
+                        : (isCleared 
+                            ? `已清仓 (${status.date})`
+                            : (status ? `清仓市值 (${status.date})` : '暂无持仓'))
                     }
-                    {!isHeld && !status && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[10px]">New</span>}
+                    {!isHeld && !status && !isCleared && <span className="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[10px]">New</span>}
                  </div>
                  
                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <div className={`text-2xl font-bold font-mono tracking-tight ${isHeld ? 'text-slate-900' : 'text-slate-500'}`}>
+                     <div className={`text-2xl font-bold font-mono tracking-tight ${isHeld ? 'text-slate-900' : (isCleared ? 'text-slate-600' : 'text-slate-500')}`}>
                         ¥{marketValue.toLocaleString()}
-                    </div>
-                    
-                     {/* Profitability Indicators */}
-                     {status && status.totalCost > 0 && (
+                     </div>
+                     
+                     {/* Profitability Indicators - 清仓资产显示盈亏但不显示收益率 */}
+                     {status && (isCleared || totalCost > 0) && (
                          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-sm font-bold ${trendBg} ${trendColor}`}>
                              <span>{trendSign}{Math.abs(profit).toLocaleString()}</span>
-                             <span className="opacity-80 text-xs">| {trendSign}{roi.toFixed(2)}%</span>
+                             {isHeld && totalCost > 0 && <span className="opacity-80 text-xs">| {trendSign}{roi.toFixed(2)}%</span>}
+                             {isCleared && <span className="opacity-80 text-xs">(已清仓)</span>}
                          </div>
                      )}
-                  </div>
+                 </div>
 
-                  {/* Unit Price - 不显示存款、现金、银行理财类 */}
-                  {isHeld && status && !['fixed', 'wealth'].includes(asset.type) && (
-                     <div className="mt-2 text-xs text-slate-500">
-                         单价: <span className="font-mono font-medium text-slate-700">¥{status.unitPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
-                     </div>
-                  )}
-             </div>
-         </div>
+                 {/* Unit Price - 不显示存款、现金、银行理财类 */}
+                 {isHeld && status && !['fixed', 'wealth'].includes(asset.type) && (
+                    <div className="mt-2 text-xs text-slate-500">
+                        单价: <span className="font-mono font-medium text-slate-700">¥{status.unitPrice.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                    </div>
+                 )}
+                 {/* 清仓资产显示成本 */}
+                 {isCleared && status && (
+                    <div className="mt-2 text-xs text-slate-500">
+                        成本: <span className="font-mono font-medium text-slate-600">¥{totalCost.toLocaleString()}</span>
+                    </div>
+                 )}
+            </div>
+        </div>
         
         {/* Footer for Held Assets */}
         {isHeld && status && (

@@ -125,7 +125,9 @@ export const useAssetGrouping = (assets: Asset[], propsStatements: MonthlyStatem
                               (asset.ticker && asset.ticker.toLowerCase().includes(searchTerm.toLowerCase()));
         if (!matchesSearch) return;
 
-        if (showHeldOnly && !assetPerformanceMap.has(asset.id)) {
+        const perf = assetPerformanceMap.get(asset.id);
+        
+        if (showHeldOnly && (!perf || perf.quantity <= 0)) {
             return;
         }
 
